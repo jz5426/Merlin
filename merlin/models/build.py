@@ -30,8 +30,8 @@ class ImageEncoder(nn.Module):
 class TextEncoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained("yikuan8/Clinical-Longformer")
-        self.text_encoder = AutoModel.from_pretrained("yikuan8/Clinical-Longformer")
+        self.tokenizer = AutoTokenizer.from_pretrained('/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/Clinical-Longformer')
+        self.text_encoder = AutoModel.from_pretrained('/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/Clinical-Longformer')
         self.text_encoder.gradient_checkpointing_enable()
         self.linear_layer = nn.Linear(768, 512)
 
