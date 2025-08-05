@@ -10,6 +10,8 @@ from merlin.utils import download_file
 class Merlin(nn.Module):
     def __init__(self, ImageEmbedding: bool = False):
         super(Merlin, self).__init__()
+        assert ImageEmbedding == False
+
         self.ImageEmbedding = ImageEmbedding
         self.checkpoint_parent_path = '/cluster/projects/mcintoshgroup/publicData/'
         self.local_dir = os.path.join(self.checkpoint_parent_path, "checkpoints")

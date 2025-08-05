@@ -9,6 +9,7 @@ from merlin.models import inflate
 
 
 class I3ResNet(torch.nn.Module):
+    """Inflated (direct conversion of 2D model to 3D) resnet"""
     def __init__(
         self, resnet2d, frame_nb=16, class_nb=1000, conv_class=False, return_skips=False, ImageEmbedding=False
     ):
@@ -86,18 +87,22 @@ class I3ResNet(torch.nn.Module):
             if self.ImageEmbedding:
                 return x_features.squeeze(2).squeeze(2).squeeze(2).unsqueeze(0)
             
-            x_ehr = self.classifier(x_features)
-            x_ehr = x_ehr.squeeze(3)
-            x_ehr = x_ehr.squeeze(3)
-            x_ehr = x_ehr.mean(2)
+            # x_ehr = self.classifier(x_features)
+            # x_ehr = x_ehr.squeeze(3)
+            # x_ehr = x_ehr.squeeze(3)
+            # x_ehr = x_ehr.mean(2)
+
             x_contrastive = self.contrastive_head(x_features)
             x_contrastive = x_contrastive.squeeze(3)
             x_contrastive = x_contrastive.squeeze(3)
             x_contrastive = x_contrastive.mean(2)
-            if self.return_skips:
-                return x_contrastive, x_ehr, skips
-            else:
-                return x_contrastive, x_ehr
+
+            # if self.return_skips:
+            #     return x_contrastive, x_ehr, skips
+            # else:
+            #     return x_contrastive, x_ehr
+
+            return x_contrastive
         else:
             x = self.avgpool(x)
             x_reshape = x.view(x.size(0), -1)

@@ -10,7 +10,7 @@ from merlin.models import i3res
 
 
 class ImageEncoder(nn.Module):
-    def __init__(self, ImageEmbedding: bool = False):
+    def __init__(self, ImageEmbedding: bool = True): # default should be true in our case to ensure only return the relevant embeddings (image)
         super().__init__()
         self.ImageEmbedding = ImageEmbedding
         resnet = torchvision.models.resnet152(pretrained=True)
@@ -25,7 +25,6 @@ class ImageEncoder(nn.Module):
         else:
             contrastive_features, ehr_features = self.i3_resnet(image)
             return contrastive_features, ehr_features
-
 
 class TextEncoder(nn.Module):
     def __init__(self):
@@ -67,7 +66,7 @@ class MerlinArchitecture(nn.Module):
         elif text is None:
             raise ValueError("Text input required for Image and Text embedding")
         
-        image_features, ehr_features = self.encode_image(image)
+        image_features = self.encode_image(image)
         text_features = self.encode_text(text)
 
         if len(image_features.shape) == 1:
@@ -77,12 +76,39 @@ class MerlinArchitecture(nn.Module):
 
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-
         return (
             image_features,
-            ehr_features,
             text_features,
         )
+
+    # def forward(self, image, text=None):
+    #     """
+    #     NOTE: ORIGINAL IMPLEMENTATION
+    #     """
+    #     if self.ImageEmbedding and text is None:
+    #         image_features = self.encode_image(image)
+    #         return image_features
+    #     elif self.ImageEmbedding and text is not None:
+    #         raise ValueError("Text input not required for image embedding")
+    #     elif text is None:
+    #         raise ValueError("Text input required for Image and Text embedding")
+        
+    #     image_features, ehr_features = self.encode_image(image)
+    #     text_features = self.encode_text(text)
+
+    #     if len(image_features.shape) == 1:
+    #         image_features = image_features.unsqueeze(0)
+    #     if len(text_features.shape) == 1:
+    #         text_features = text_features.unsqueeze(0)
+
+    #     image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+    #     text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+    #     return (
+    #         image_features,
+    #         ehr_features,
+    #         text_features,
+    #     )
 
 
 def sanitize_report(report):
