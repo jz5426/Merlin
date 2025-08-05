@@ -81,35 +81,6 @@ class MerlinArchitecture(nn.Module):
             text_features,
         )
 
-    # def forward(self, image, text=None):
-    #     """
-    #     NOTE: ORIGINAL IMPLEMENTATION
-    #     """
-    #     if self.ImageEmbedding and text is None:
-    #         image_features = self.encode_image(image)
-    #         return image_features
-    #     elif self.ImageEmbedding and text is not None:
-    #         raise ValueError("Text input not required for image embedding")
-    #     elif text is None:
-    #         raise ValueError("Text input required for Image and Text embedding")
-        
-    #     image_features, ehr_features = self.encode_image(image)
-    #     text_features = self.encode_text(text)
-
-    #     if len(image_features.shape) == 1:
-    #         image_features = image_features.unsqueeze(0)
-    #     if len(text_features.shape) == 1:
-    #         text_features = text_features.unsqueeze(0)
-
-    #     image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-    #     text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-
-    #     return (
-    #         image_features,
-    #         ehr_features,
-    #         text_features,
-    #     )
-
 
 def sanitize_report(report):
     report = report.lower()
