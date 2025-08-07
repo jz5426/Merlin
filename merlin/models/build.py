@@ -13,7 +13,7 @@ class ImageEncoder(nn.Module):
     def __init__(self, ImageEmbedding: bool = True): # default should be true in our case to ensure only return the relevant embeddings (image)
         super().__init__()
         self.ImageEmbedding = ImageEmbedding
-        resnet = torchvision.models.resnet152(pretrained=True)
+        resnet = torchvision.models.resnet152(pretrained=False)
         self.i3_resnet = i3res.I3ResNet(
             copy.deepcopy(resnet), class_nb=1692, conv_class=True, ImageEmbedding=self.ImageEmbedding
         )

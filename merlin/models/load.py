@@ -14,7 +14,7 @@ class Merlin(nn.Module):
 
         self.ImageEmbedding = ImageEmbedding
         self.checkpoint_parent_path = '/cluster/projects/mcintoshgroup/publicData/'
-        self.local_dir = os.path.join(self.checkpoint_parent_path, "checkpoints")
+        self.local_dir = os.path.join(self.checkpoint_parent_path, "merlin_checkpoint")
         self.checkpoint_name = (
             "i3_resnet_clinical_longformer_best_clip_04-02-2024_23-21-36_epoch_99.pt"
         )
@@ -26,23 +26,13 @@ class Merlin(nn.Module):
     """
 
     def _load_model(self):
-        # self._download_checkpoint()
         model = MerlinArchitecture(ImageEmbedding=self.ImageEmbedding)
-        model.load_state_dict(
-            torch.load(os.path.join(self.local_dir, self.checkpoint_name))
-        )
+        state_dict = torch.load(os.path.join(self.local_dir, self.checkpoint_name))
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+
+        print("Missing keys:", missing_keys)
+        print("Unexpected keys:", unexpected_keys)
         return model
-
-    """ 
-    Download the Merlin weights from the Hugging Face Hub
-    """
-
-    def _download_checkpoint(self):
-        download_file(
-            repo_id=self.repo_id,
-            filename=self.checkpoint_name,
-            local_dir=self.local_dir,
-        )
 
     def forward(self, *input):
         return self.model(*input)
