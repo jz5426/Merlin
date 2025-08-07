@@ -22,10 +22,16 @@ def clip_loss(img_feats, txt_feats, temperature):
 # Utilities for prompts
 # -----------------------
 def build_prompts(pathologies):
+    """
+    pathologies: a list of pathology names
+    """
     pos = [f"There is a {p}" for p in pathologies]
     neg = [f"There is no {p}" for p in pathologies]
+    
     # Interleave as [pos0, neg0, pos1, neg1, ...] for easy indexing
     prompts = []
+
+    # pair up the positive and negative prompt for the same disease
     for p_pos, p_neg in zip(pos, neg):
         prompts.extend([p_pos, p_neg])
     return prompts  # length = 2 * P
@@ -52,6 +58,7 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
 
     # Precompute helpful indices
     # For pathology k: pos_idx = 2*k, neg_idx = 2*k+1
+    # used to index the similarity matrix for each image down below.
     idx_pairs = [(2*k, 2*k+1) for k in range(len(pathologies))]
 
     row_idx = 0
@@ -59,10 +66,12 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
         imgs = batch['image'].to(device, non_blocking=True)
 
         assert id_key in batch
+        
         # Grab identifier if present; otherwise create a running index
         ids = batch[id_key]
+        
         # ensure list of strings
-        if torch.is_tensor(ids): ids = ids.cpu().tolist()
+        ids = ids.cpu().tolist()
         ids = [str(x) for x in ids]
 
         # Encode images

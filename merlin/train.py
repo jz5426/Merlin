@@ -75,7 +75,6 @@ PATHOLOGIES = [
 ]
 
 prompts = build_prompts(PATHOLOGIES)
-txt_feats_norm = encode_prompts(model, prompts, device)
 
 # -----------------------
 # Training loop
@@ -114,6 +113,7 @@ for epoch in range(1, args.epochs + 1):
         # -----------------------
         # Run prompt-based multi-label predictions on the full val set
         # -----------------------
+        txt_feats_norm = encode_prompts(model, prompts, device)
         predict_pathologies(
             model=model,
             val_loader=val_loader,
