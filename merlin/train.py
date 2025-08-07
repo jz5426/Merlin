@@ -1,21 +1,29 @@
-"""
-similar to the demo.py file but as a training script
-"""
-
-"""
-Download Merlin and test the model on sample data that is downloaded from huggingface
-"""
-
-import os
 import warnings
 import torch
-
-from merlin.data import download_sample_data
-# from merlin.data import DataLoader
 from torch.utils.data import DataLoader 
-
 from merlin import Merlin
 from merlin.data.ctRate_dataloader import CTReportDataset
+
+import argparse
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from torch.optim import AdamW
+import csv
+
+from merlin.train_utils import build_prompts, clip_loss, encode_prompts, predict_pathologies
+
+# -----------------------
+# Parse Arguments
+# -----------------------
+parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
+parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
+parser.add_argument("--epochs", type=int, default=5, help="Number of epochs")
+parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
+parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
+parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
+args = parser.parse_args()
 
 
 warnings.filterwarnings("ignore")
@@ -35,64 +43,86 @@ ctrate_val_dataset = CTReportDataset(
 train_loader = DataLoader(ctrate_train_dataset, batch_size=2, shuffle=True, num_workers=1)
 val_loader = DataLoader(ctrate_val_dataset, batch_size=2, shuffle=False, num_workers=1)
 
-# load model
+
+# -----------------------
+# Model & optimizer
+# -----------------------
 model = Merlin().to(device)
+args.temperature = model.model.logit_scale
+optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-# training loop
-for batch in train_loader:
-    # TODO: double check image shape.
-    img, text = batch['image'].to(device), batch['text']
+# Medical material	Arterial wall calcification	Cardiomegaly	Pericardial effusion	Coronary artery wall calcification	Hiatal hernia	Lymphadenopathy	Emphysema	Atelectasis	Lung nodule	Lung opacity	Pulmonary fibrotic sequela	Pleural effusion	Mosaic attenuation pattern	Peribronchial thickening	Consolidation	Bronchiectasis	Interlobular septal thickening
 
-# model.eval()
-# model.cuda()
+# list of labels
+PATHOLOGIES = [
+    'Medical material',
+    'Arterial wall calcification',
+    'Cardiomegaly',
+    'Pericardial effusion',
+    'Coronary artery wall calcification',
+    'Hiatal hernia',
+    'Lymphadenopathy',
+    'Emphysema',
+    'Atelectasis',
+    'Lung nodule',
+    'Lung opacity',
+    'Pulmonary fibrotic sequela',
+    'Pleural effusion',
+    'Mosaic attenuation pattern',
+    'Consolidation',
+    'Bronchiectasis',
+    'Interlobular septal thickening'
+]
 
-# data_dir = os.path.join(os.path.dirname(__file__), "abct_data")
-# cache_dir = data_dir.replace("abct_data", "abct_data_cache")
+prompts = build_prompts(PATHOLOGIES)
+txt_feats_norm = encode_prompts(model, prompts, device)
 
-# datalist = [
-#     {
-#         "image": download_sample_data(
-#             data_dir
-#         ),  # function returns local path to nifti file
-#         "text": "Lower thorax: A small low-attenuating fluid structure is noted in the right cardiophrenic angle in keeping with a tiny pericardial cyst."
-#         "Liver and biliary tree: Normal. Gallbladder: Normal. Spleen: Normal. Pancreas: Normal. Adrenal glands: Normal. "
-#         "Kidneys and ureters: Symmetric enhancement and excretion of the bilateral kidneys, with no striated nephrogram to suggest pyelonephritis. "
-#         "Urothelial enhancement bilaterally, consistent with urinary tract infection. No renal/ureteral calculi. No hydronephrosis. "
-#         "Gastrointestinal tract: Normal. Normal gas-filled appendix. Peritoneal cavity: No free fluid. "
-#         "Bladder: Marked urothelial enhancement consistent with cystitis. Uterus and ovaries: Normal. "
-#         "Vasculature: Patent. Lymph nodes: Normal. Abdominal wall: Normal. "
-#         "Musculoskeletal: Degenerative change of the spine.",
-#     },
-# ]
+# -----------------------
+# Training loop
+# -----------------------
+for epoch in range(1, args.epochs + 1):
+    # ---- Train ----
+    model.train()
+    running_loss = 0.0
+    for batch in train_loader:
+        img, txt = batch['image'].to(device, non_blocking=True), batch['text']
+        optimizer.zero_grad()
+        img_feats, txt_feats = model(img, txt)  # [B, 512], [B, 512]
+        loss = clip_loss(img_feats, txt_feats, args.temperature)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+    train_loss = running_loss / len(train_loader)
 
-# # TODO: replace with ct-rate dataloader
-# dataloader = DataLoader(
-#     datalist=datalist,
-#     cache_dir=cache_dir,
-#     batchsize=8,
-#     shuffle=True,
-#     num_workers=0,
-# )
+    # ---- Validate ----
+    if epoch % args.val_every == 0:
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for batch in val_loader:
+                img, txt = batch['image'].to(device, non_blocking=True), batch['text']
+                img_feats, txt_feats = model(img, txt)
+                loss = clip_loss(img_feats, txt_feats, args.temperature)
+                val_loss += loss.item()
 
-# # TODO: replace with training loop
-# for batch in dataloader:
-#     outputs = model(batch["image"].to(device), batch["text"])
-#     print("\n================== Output Shapes ==================")
-#     print(f"Contrastive image embeddings shape: {outputs[0].shape}")
-#     print(f"Phenotype predictions shape: {outputs[1].shape}")
-#     print(f"Contrastive text embeddings shape: {outputs[2].shape}")
+        # TODO: store the labels according to some order into the csv file
+        # Later we use the it to compare the ground truth
+        val_loss /= len(val_loader)
 
-# # TODO: replace with evaluation loop and save the prediction results just like fvlm code
-# ## Get the Image Embeddings
-# model = Merlin(ImageEmbedding=True)
-# model.eval()
-# model.cuda()
+        print(f"Epoch {epoch}/{args.epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
-# for batch in dataloader:
-#     outputs = model(
-#         batch["image"].to(device),
-#     )
-#     print("\n================== Output Shapes ==================")
-#     print(
-#         f"Image embeddings shape (Can be used for downstream tasks): {outputs[0].shape}"
-#     )
+        # -----------------------
+        # Run prompt-based multi-label predictions on the full val set
+        # -----------------------
+        predict_pathologies(
+            model=model,
+            val_loader=val_loader,
+            pathologies=PATHOLOGIES,
+            txt_feats_norm=txt_feats_norm,
+            temperature=args.temperature,
+            threshold=args.pred_threshold,
+            out_csv=args.out_csv,
+            device=device,
+            id_key=args.id_key
+        )
+

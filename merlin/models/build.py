@@ -23,8 +23,12 @@ class ImageEncoder(nn.Module):
             contrastive_features = self.i3_resnet(image)
             return contrastive_features
         else:
-            contrastive_features, ehr_features = self.i3_resnet(image)
-            return contrastive_features, ehr_features
+            # contrastive_features, ehr_features = self.i3_resnet(image)
+            # return contrastive_features, ehr_features
+
+            # we no longer have ehr features in our case
+            contrastive_features = self.i3_resnet(image)
+            return contrastive_features
 
 class TextEncoder(nn.Module):
     def __init__(self):
@@ -74,6 +78,7 @@ class MerlinArchitecture(nn.Module):
         if len(text_features.shape) == 1:
             text_features = text_features.unsqueeze(0)
 
+        # normalize the feature
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         return (

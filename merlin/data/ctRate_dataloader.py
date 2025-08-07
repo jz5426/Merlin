@@ -135,6 +135,7 @@ class CTReportDataset(Dataset):
         input_text = input_text.replace(')', '')
 
         data = {
+            'image_id': os.path.basename(nii_file),
             'image': video_tensor,
             'text': input_text
         }

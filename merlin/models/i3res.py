@@ -57,6 +57,7 @@ class I3ResNet(torch.nn.Module):
 
     def forward(self, x):
         skips = []
+        # this already reshape with depth before H and W
         x = x.permute(0, 1, 4, 2, 3)
         x = torch.cat((x, x, x), dim=1)
         if self.return_skips:
