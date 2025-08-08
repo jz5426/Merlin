@@ -5,15 +5,26 @@ from torch import nn
 import csv
 import os
 
+def count_params(model):
+    # Count all parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    # Count only trainable parameters
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(f"Total parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+
 # -----------------------
 # Loss function (CLIP-style)
 # -----------------------
 def clip_loss(img_feats, txt_feats, temperature):
-    img_feats = nn.functional.normalize(img_feats, dim=-1)
-    txt_feats = nn.functional.normalize(txt_feats, dim=-1)
+    # NOTE: already normalized during forward pass
+    # img_feats = nn.functional.normalize(img_feats, dim=-1)
+    # txt_feats = nn.functional.normalize(txt_feats, dim=-1)
+
     logits_per_image = (img_feats @ txt_feats.t()) / temperature
     logits_per_text = logits_per_image.t()
-    targets = torch.arange(img_feats.size(0), device=img_feats.device)
+    targets = torch.arange(img_feats.size(0), device=img_feats.device) # define target index for each row in logits_per_image or logits_per_text matrix.
     loss_i2t = nn.functional.cross_entropy(logits_per_image, targets)
     loss_t2i = nn.functional.cross_entropy(logits_per_text, targets)
     return (loss_i2t + loss_t2i) / 2
@@ -25,8 +36,8 @@ def build_prompts(pathologies):
     """
     pathologies: a list of pathology names
     """
-    pos = [f"There is a {p}" for p in pathologies]
-    neg = [f"There is no {p}" for p in pathologies]
+    pos = [f"{p}" for p in pathologies]
+    neg = [f"No {p}" for p in pathologies]
     
     # Interleave as [pos0, neg0, pos1, neg1, ...] for easy indexing
     prompts = []
@@ -43,6 +54,7 @@ def encode_prompts(model, prompts, device):
     Assumes model.encode_text exists. If not, replace with your model's text-encode call.
     """
     txt_feats = model.encode_text(prompts).to(device)
+    txt_feats = txt_feats / txt_feats.norm(dim=-1, keepdim=True)
     return txt_feats
 
 
@@ -53,6 +65,8 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
         p = softmax([sim_pos, sim_neg]/T)[0]
     Save predictions and probabilities to CSV.
     """
+    print(f"Zero shot validation...")
+
     model.eval()
     results = []
 
@@ -62,40 +76,40 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
     idx_pairs = [(2*k, 2*k+1) for k in range(len(pathologies))]
 
     row_idx = 0
-    for batch in val_loader:
-        imgs = batch['image'].to(device, non_blocking=True)
+    with torch.no_grad():
+        for batch in val_loader:
+            imgs = batch['image'].to(device)
 
-        assert id_key in batch
-        
-        # Grab identifier if present; otherwise create a running index
-        ids = batch[id_key]
-        
-        # ensure list of strings
-        ids = ids.cpu().tolist()
-        ids = [str(x) for x in ids]
+            # get the image_ids, the volume names, the main identifier
+            assert id_key in batch
+            ids = [str(x) for x in batch[id_key]]
 
-        # Encode images
-        img_feats_norm = model.encode_image(imgs) 
+            # Encode and normalized images
+            image_features = model.encode_image(imgs) 
+            img_feats_norm = image_features / image_features.norm(dim=-1, keepdim=True)
 
-        # Similarities to all prompts: [B, 2P]
-        sims = img_feats_norm @ txt_feats_norm.t()
+            # Similarities to all prompts: [B, 2P]
+            sims = img_feats_norm @ txt_feats_norm.t()
 
-        # For each sample, compute per-pathology prob & pred
-        for b, sample_id in enumerate(ids):
-            row = {"id": sample_id}
-            for k, (pos_i, neg_i) in enumerate(idx_pairs):
-                logits = torch.stack([sims[b, pos_i], sims[b, neg_i]]) / temperature
-                probs = torch.softmax(logits, dim=0)
-                p_pos = probs[0].item() # index 0 is positive prompt
-                pred = int(p_pos >= 0.5)
-                pname = pathologies[k]
-                row[f"{pname}_prob"] = round(p_pos, 6)
-                row[f"{pname}_pred"] = pred
-            results.append(row)
-        row_idx += len(ids)
+            # For each sample, compute per-pathology prob & pred and save as a dictionary
+            for b, sample_id in enumerate(ids):
+                row = {"VolumeName": sample_id}
+                for k, (pos_i, neg_i) in enumerate(idx_pairs):
+                    logits = torch.stack([sims[b, pos_i], sims[b, neg_i]]) / temperature
+                    probs = torch.softmax(logits, dim=0)
+                    p_pos = probs[0].item() # index 0 is positive prompt
+                    pred = int(p_pos >= 0.5)
+                    pname = pathologies[k]
 
-    # Write CSV
-    fieldnames = ["id"] + [f"{p}_prob" for p in pathologies] + [f"{p}_pred" for p in pathologies]
+                    # store the probability and prediciton mainly for computing the metrics score down the road
+                    row[f"{'_'.join(pname.split())}_prob"] = round(p_pos, 6)
+                    row[f"{'_'.join(pname.split())}_pred"] = pred
+                results.append(row)
+            row_idx += len(ids)
+
+    # overwrite the CSV file.
+    fieldnames = ["VolumeName"] + [f"{'_'.join(p.split())}_prob" for p in pathologies] + [f"{'_'.join(p.split())}_pred" for p in pathologies]
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
     with open(out_csv, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

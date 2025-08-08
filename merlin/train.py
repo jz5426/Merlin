@@ -3,27 +3,29 @@ import torch
 from torch.utils.data import DataLoader 
 from merlin import Merlin
 from merlin.data.ctRate_dataloader import CTReportDataset
-
+from tqdm import tqdm
 import argparse
 import torch
-from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-import csv
+import os
 
-from merlin.train_utils import build_prompts, clip_loss, encode_prompts, predict_pathologies
+from merlin.train_utils import build_prompts, clip_loss, count_params, encode_prompts, predict_pathologies
 
 # -----------------------
 # Parse Arguments
 # -----------------------
 parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
-parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
-parser.add_argument("--epochs", type=int, default=5, help="Number of epochs")
-parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
+parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
+parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
-parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
+parser.add_argument("--val_every", type=int, default=2, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
+parser.add_argument("--out_csv", type=str, default='./ctrate_zeroshot/results.csv', help="zero-shot result storage path")
+parser.add_argument("--ckpt_path", type=str, default='/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/ctrate_finetuned/ctrate_ckpt.pth', help="zero-shot result storage path")
 args = parser.parse_args()
+
 
 
 warnings.filterwarnings("ignore")
@@ -40,17 +42,21 @@ ctrate_val_dataset = CTReportDataset(
 )
 
 # load dataloader
-train_loader = DataLoader(ctrate_train_dataset, batch_size=2, shuffle=True, num_workers=1)
-val_loader = DataLoader(ctrate_val_dataset, batch_size=2, shuffle=False, num_workers=1)
+train_loader = DataLoader(ctrate_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=1)
+val_loader = DataLoader(ctrate_val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=1)
 
 
 # -----------------------
 # Model & optimizer
 # -----------------------
 model = Merlin().to(device)
+count_params(model)
 args.temperature = model.model.logit_scale
 optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
+# print arguments
+for k, v in vars(args).items():
+    print(f"{k}: {v}")
 # Medical material	Arterial wall calcification	Cardiomegaly	Pericardial effusion	Coronary artery wall calcification	Hiatal hernia	Lymphadenopathy	Emphysema	Atelectasis	Lung nodule	Lung opacity	Pulmonary fibrotic sequela	Pleural effusion	Mosaic attenuation pattern	Peribronchial thickening	Consolidation	Bronchiectasis	Interlobular septal thickening
 
 # list of labels
@@ -79,15 +85,17 @@ prompts = build_prompts(PATHOLOGIES)
 # -----------------------
 # Training loop
 # -----------------------
+best_val_loss = float("inf")
 for epoch in range(1, args.epochs + 1):
+
     # ---- Train ----
     model.train()
     running_loss = 0.0
-    for batch in train_loader:
+    for batch in tqdm(train_loader, desc=f"Epoch {epoch} [Train]", leave=False):
         img, txt = batch['image'].to(device, non_blocking=True), batch['text']
         optimizer.zero_grad()
-        img_feats, txt_feats = model(img, txt)  # [B, 512], [B, 512]
-        loss = clip_loss(img_feats, txt_feats, args.temperature)
+        img_feats_norm, txt_feats_norm = model(img, txt)  # [B, 512], [B, 512]
+        loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -98,31 +106,33 @@ for epoch in range(1, args.epochs + 1):
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for batch in val_loader:
+            for batch in tqdm(val_loader, desc=f"Epoch {epoch} [Val]", leave=False):
                 img, txt = batch['image'].to(device, non_blocking=True), batch['text']
-                img_feats, txt_feats = model(img, txt)
-                loss = clip_loss(img_feats, txt_feats, args.temperature)
+                img_feats_norm, txt_feats_norm = model(img, txt)
+                loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
                 val_loss += loss.item()
 
-        # TODO: store the labels according to some order into the csv file
-        # Later we use the it to compare the ground truth
         val_loss /= len(val_loader)
 
         print(f"Epoch {epoch}/{args.epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
-        # -----------------------
-        # Run prompt-based multi-label predictions on the full val set
-        # -----------------------
-        txt_feats_norm = encode_prompts(model, prompts, device)
-        predict_pathologies(
-            model=model,
-            val_loader=val_loader,
-            pathologies=PATHOLOGIES,
-            txt_feats_norm=txt_feats_norm,
-            temperature=args.temperature,
-            threshold=args.pred_threshold,
-            out_csv=args.out_csv,
-            device=device,
-            id_key=args.id_key
-        )
-
+        # save the best checkpoint during the training trajectory
+        os.makedirs(os.path.dirname(args.ckpt_path), exist_ok=True)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), args.ckpt_path)
+            print(f"[Checkpoint] Best model updated (val_loss={val_loss:.4f}) → {args.ckpt_path}")
+            
+            # -----------------------
+            # Run prompt-based multi-label predictions on the full val set
+            # -----------------------
+            txt_feats_norm = encode_prompts(model.model, prompts, device)
+            predict_pathologies(
+                model=model.model,
+                val_loader=val_loader,
+                pathologies=PATHOLOGIES,
+                txt_feats_norm=txt_feats_norm,
+                temperature=args.temperature,
+                out_csv=args.out_csv,
+                device=device,
+            )
