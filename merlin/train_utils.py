@@ -5,6 +5,27 @@ from torch import nn
 import csv
 import os
 
+
+PATHOLOGIES = [
+    'Medical material',
+    'Arterial wall calcification',
+    'Cardiomegaly',
+    'Pericardial effusion',
+    'Coronary artery wall calcification',
+    'Hiatal hernia',
+    'Lymphadenopathy',
+    'Emphysema',
+    'Atelectasis',
+    'Lung nodule',
+    'Lung opacity',
+    'Pulmonary fibrotic sequela',
+    'Pleural effusion',
+    'Mosaic attenuation pattern',
+    'Consolidation',
+    'Bronchiectasis',
+    'Interlobular septal thickening'
+]
+
 def count_params(model):
     # Count all parameters
     total_params = sum(p.numel() for p in model.parameters())

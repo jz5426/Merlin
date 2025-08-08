@@ -4,6 +4,7 @@ import math
 import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix, roc_auc_score, f1_score, precision_score
+from merlin.train_utils import PATHOLOGIES
 
 def find_threshold(probabilities, true_labels):
     """
@@ -53,7 +54,7 @@ auc_scores = {}
 spec_scores = {}
 sens_scores = {}
 acc_scores = {}
-f1_scores = {}
+f1_weighted_scores = {}
 prec_scores = {}
 
 for column in columns:
@@ -97,7 +98,7 @@ for column in columns:
     f1 = f1_score(gt_labels, pd_labels, average="weighted")
     prec = precision_score(gt_labels, pd_labels)
 
-    f1_scores[abnormality] = f1
+    f1_weighted_scores[abnormality] = f1
     prec_scores[abnormality] = prec
 
     acc = (tp + tn) / (tp + tn + fp + fn)
@@ -109,5 +110,5 @@ print('Average AUC of Ours:', round(np.mean(list(auc_scores.values())), 3))
 print('Average ACC of Ours:', round(np.mean(list(acc_scores.values())), 3))
 print('Average Spec of Ours:', round(np.mean(list(spec_scores.values())), 3))
 print('Average Sens of Ours:', round(np.mean(list(sens_scores.values())), 3))
-print('Average F1 of Ours:', round(np.mean(list(f1_scores.values())), 3))
+print('Average F1 of Ours:', round(np.mean(list(f1_weighted_scores.values())), 3))
 print('Average Prec of Ours:', round(np.mean(list(prec_scores.values())), 3))

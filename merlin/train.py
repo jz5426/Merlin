@@ -10,18 +10,19 @@ from torch.utils.data import DataLoader
 from torch.optim import AdamW
 import os
 
-from merlin.train_utils import build_prompts, clip_loss, count_params, encode_prompts, predict_pathologies
+from merlin.train_utils import build_prompts, clip_loss, count_params, encode_prompts, predict_pathologies, PATHOLOGIES
 
 # -----------------------
 # Parse Arguments
 # -----------------------
 parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
-parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
+parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
 parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
+parser.add_argument("--num_workers", type=int, default=1, help="number of workers")
 parser.add_argument("--out_csv", type=str, default='./ctrate_zeroshot/results.csv', help="zero-shot result storage path")
 parser.add_argument("--ckpt_path", type=str, default='/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/ctrate_finetuned/ctrate_ckpt.pth', help="zero-shot result storage path")
 args = parser.parse_args()
@@ -40,8 +41,8 @@ ctrate_val_dataset = CTReportDataset(
 )
 
 # load dataloader
-train_loader = DataLoader(ctrate_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=1)
-val_loader = DataLoader(ctrate_val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=1)
+train_loader = DataLoader(ctrate_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+val_loader = DataLoader(ctrate_val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
 
 # -----------------------
@@ -55,28 +56,6 @@ optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay
 # print arguments
 for k, v in vars(args).items():
     print(f"{k}: {v}")
-# Medical material	Arterial wall calcification	Cardiomegaly	Pericardial effusion	Coronary artery wall calcification	Hiatal hernia	Lymphadenopathy	Emphysema	Atelectasis	Lung nodule	Lung opacity	Pulmonary fibrotic sequela	Pleural effusion	Mosaic attenuation pattern	Peribronchial thickening	Consolidation	Bronchiectasis	Interlobular septal thickening
-
-# list of labels
-PATHOLOGIES = [
-    'Medical material',
-    'Arterial wall calcification',
-    'Cardiomegaly',
-    'Pericardial effusion',
-    'Coronary artery wall calcification',
-    'Hiatal hernia',
-    'Lymphadenopathy',
-    'Emphysema',
-    'Atelectasis',
-    'Lung nodule',
-    'Lung opacity',
-    'Pulmonary fibrotic sequela',
-    'Pleural effusion',
-    'Mosaic attenuation pattern',
-    'Consolidation',
-    'Bronchiectasis',
-    'Interlobular septal thickening'
-]
 
 prompts = build_prompts(PATHOLOGIES)
 

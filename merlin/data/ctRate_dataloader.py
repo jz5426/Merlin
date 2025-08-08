@@ -7,11 +7,15 @@ import torch.nn.functional as F
 import tqdm
 import pandas as pd
 import nibabel as nib
+from nibabel.orientations import aff2axcodes
+from monai.data import NibabelReader
+import numpy as np
 
 from monai.transforms import (
     EnsureChannelFirstd,
     Compose,
     LoadImaged,
+    EnsureTyped,
     Orientationd,
     ScaleIntensityRanged,
     Spacingd,
@@ -54,16 +58,17 @@ def resize_array(array, current_spacing, target_spacing):
     return resized_array
 
 class CTReportDataset(Dataset):
-    def __init__(self, data_folder, report_csv, min_slices=20, resize_dim=500):
+    def __init__(self, data_folder, report_csv, min_slices=20):
         self.split = 'train' if 'train' in data_folder.lower() else 'val'
 
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
-                LoadImaged(keys=["image"]),
+                LoadImaged(keys=["image"], image_only=False, reader=NibabelReader), # make sure image_only = False to get the metadata
+                EnsureTyped(keys="image", track_meta=True), # manually added
                 EnsureChannelFirstd(keys=["image"]),
-                Orientationd(keys=["image"], axcodes="RAS"), # TODO: check this
-                Spacingd(keys=["image"], pixdim=(1.5, 1.5, 3), mode=("bilinear")), # TODO: check this.
+                Orientationd(keys=["image"], axcodes="RAS"),
+                Spacingd(keys=["image"], pixdim=(1.5, 1.5, 3), mode=("bilinear")),
                 ScaleIntensityRanged(
                     keys=["image"], a_min=-1000, a_max=1000, b_min=0.0, b_max=1.0, clip=True
                 ),
@@ -75,6 +80,7 @@ class CTReportDataset(Dataset):
                 ToTensord(keys=["image"]),
             ]
         )
+
         self.data_folder = data_folder
         self.min_slices = min_slices
         self.accession_to_text = None
@@ -94,11 +100,26 @@ class CTReportDataset(Dataset):
         return accession_to_text
 
     def nii_img_to_tensor(self, path):
-
+        # non-debug implementation
         transformed_tensor = self.merlin_transform({'image': path})
         img_tensor = transformed_tensor["image"]
-
+        assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
         return img_tensor
+
+        # DEBUG ONLY
+        # tx = Compose([
+        #     LoadImaged(keys="image", image_only=False),
+        #     EnsureTyped(keys="image", track_meta=True),
+        # ])
+
+        # d = tx({"image": path})
+        # print("BEFORE(meta):", aff2axcodes(d["image"].meta["affine"]))
+
+        # orient = Orientationd(keys="image", axcodes="RAS")
+        # d = orient(d)  # <-- reassign!
+
+        # print("AFTER(meta):", aff2axcodes(d["image"].meta["affine"]))
+        # print('HI')
 
     def prepare_samples(self):
         datalist = []
