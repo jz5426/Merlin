@@ -56,12 +56,14 @@ def resize_array(array, current_spacing, target_spacing):
 class CTReportDataset(Dataset):
     def __init__(self, data_folder, report_csv, min_slices=20, resize_dim=500):
         self.split = 'train' if 'train' in data_folder.lower() else 'val'
+
+        # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
                 LoadImaged(keys=["image"]),
                 EnsureChannelFirstd(keys=["image"]),
-                Orientationd(keys=["image"], axcodes="RAS"),
-                Spacingd(keys=["image"], pixdim=(1.5, 1.5, 3), mode=("bilinear")),
+                Orientationd(keys=["image"], axcodes="RAS"), # TODO: check this
+                Spacingd(keys=["image"], pixdim=(1.5, 1.5, 3), mode=("bilinear")), # TODO: check this.
                 ScaleIntensityRanged(
                     keys=["image"], a_min=-1000, a_max=1000, b_min=0.0, b_max=1.0, clip=True
                 ),
@@ -107,7 +109,7 @@ class CTReportDataset(Dataset):
                     accession_number = nii_file.split("/")[-1]
                     if accession_number not in self.accession_to_text:
                         continue
-                    
+                    # TODO: if does not work, use the CT-CLIP implementation here
                     # report text
                     findings_impressions = self.accession_to_text[accession_number] # [0] is findings and [1] is impression
 

@@ -20,13 +20,11 @@ parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
 parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
 parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
-parser.add_argument("--val_every", type=int, default=2, help="Validate every N epochs")
+parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
 parser.add_argument("--out_csv", type=str, default='./ctrate_zeroshot/results.csv', help="zero-shot result storage path")
 parser.add_argument("--ckpt_path", type=str, default='/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/ctrate_finetuned/ctrate_ckpt.pth', help="zero-shot result storage path")
 args = parser.parse_args()
-
-
 
 warnings.filterwarnings("ignore")
 device = "cuda" if torch.cuda.is_available() else "cpu"

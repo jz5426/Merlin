@@ -11,7 +11,7 @@
 #SBATCH --gres=gpu:l40:1
 #SBATCH --begin=now
 
-source activate fvlm
+source activate merlin
 
 # train split
 python /cluster/home/t135419uhn/Merlin/merlin/train.py --batch_size 8
