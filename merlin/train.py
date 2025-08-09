@@ -31,6 +31,8 @@ warnings.filterwarnings("ignore")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # load dataset
+# TODO: wrong file path
+# should be this one: /cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip, which include .h5 files.
 ctrate_train_dataset = CTReportDataset(
     data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip_processed_train_images',
     report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
