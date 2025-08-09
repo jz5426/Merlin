@@ -4,7 +4,8 @@ import torch
 from torch import nn
 import csv
 import os
-
+from PIL import Image
+import numpy as np
 
 PATHOLOGIES = [
     'Medical material',
@@ -137,3 +138,79 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
         for r in results:
             writer.writerow(r)
     print(f"[Saved] {len(results)} rows to {out_csv}")
+
+
+def save_middle_slices_normalized(ct_tensor, save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices/', convention="radiological", prefix="ct"):
+    """
+    Save middle slices from a normalized CT tensor in RAS orientation.
+    Args:
+        ct_tensor: torch.Tensor, shape [1, X, Y, Z] (RAS orientation)
+        save_dir: output folder
+        prefix: filename prefix
+        convention: "radiological" or "neurological"
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    vol = ct_tensor.squeeze(0)  # [X,Y,Z]
+    assert vol.ndim == 3, "Expected [X,Y,Z] after squeezing channel."
+
+    X, Y, Z = vol.shape
+    mid_x, mid_y, mid_z = X//2, Y//2, Z//2
+
+    axial    = vol[:, :, mid_z].cpu().numpy()   # (X,Y)
+    coronal  = vol[:, mid_y, :].cpu().numpy()   # (X,Z)
+    sagittal = vol[mid_x, :, :].cpu().numpy()   # (Y,Z)
+
+    # Arrange for display
+    axial_img    = axial.T
+    coronal_img  = coronal.T
+    sagittal_img = sagittal.T
+
+    if convention.lower().startswith("radio"):
+        axial_img    = np.fliplr(axial_img)
+        coronal_img  = np.fliplr(coronal_img)
+
+    # Robust percentile normalization to [0,255]
+    def to_uint8(img, p_lo=1.0, p_hi=99.0, z_clip=2.5, eps=1e-6):
+        """Robust slice scaling -> uint8 with multiple fallbacks."""
+        a = np.asarray(img, dtype=np.float32)
+        a = np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)
+
+        nz = a[a != 0]  # ignore background
+        use = nz if nz.size > 0 else a
+
+        # 1) percentile on non-zero
+        lo, hi = np.percentile(use, p_lo), np.percentile(use, p_hi)
+        if hi - lo < eps:
+            # 2) z-score window on non-zero
+            m, s = use.mean(), use.std()
+            lo, hi = m - z_clip * s, m + z_clip * s
+
+        if hi - lo < eps:
+            # 3) min-max on non-zero
+            lo, hi = use.min(), use.max()
+
+        # final guard
+        if hi - lo < eps:
+            # give it a tiny range so we don't divide by 0
+            hi = lo + 1.0
+
+        # scale
+        out = (a - lo) / (hi - lo)
+        out = np.clip(out, 0, 1)
+        out = (out * 255.0).astype(np.uint8)
+
+        return out
+
+    axial_u8    = to_uint8(axial_img)
+    coronal_u8  = to_uint8(coronal_img)
+    sagittal_u8 = to_uint8(sagittal_img)
+
+    def save_png(path, arr):
+        # plt.imsave(path, arr, cmap="gray")
+        pil_image = Image.fromarray(arr, 'L')
+        pil_image.save(path)
+
+    save_png(os.path.join(save_dir, f"{prefix}_axial.png"),    axial_u8)
+    save_png(os.path.join(save_dir, f"{prefix}_coronal.png"),  coronal_u8)
+    save_png(os.path.join(save_dir, f"{prefix}_sagittal.png"), sagittal_u8)

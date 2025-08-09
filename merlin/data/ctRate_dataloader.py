@@ -24,6 +24,8 @@ from monai.transforms import (
     CenterSpatialCropd,
 )
 
+from merlin.train_utils import save_middle_slices_normalized
+
 
 ### eval code reference
 # /cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip_processed_val_images
@@ -64,7 +66,7 @@ class CTReportDataset(Dataset):
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
-                LoadImaged(keys=["image"], image_only=False, reader=NibabelReader), # make sure image_only = False to get the metadata
+                LoadImaged(keys=["image"], image_only=False, reader=NibabelReader),
                 EnsureTyped(keys="image", track_meta=True), # manually added
                 EnsureChannelFirstd(keys=["image"]),
                 Orientationd(keys=["image"], axcodes="RAS"),
@@ -104,6 +106,9 @@ class CTReportDataset(Dataset):
         transformed_tensor = self.merlin_transform({'image': path})
         img_tensor = transformed_tensor["image"]
         assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
+
+        # NOTE: project a slice and visualize.
+        save_middle_slices_normalized(img_tensor)
         return img_tensor
 
         # DEBUG ONLY
