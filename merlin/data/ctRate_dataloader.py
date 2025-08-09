@@ -1,15 +1,12 @@
 import os
 import glob
 from torch.utils.data import Dataset
-import torchvision.transforms as transforms
-from functools import partial
 import torch.nn.functional as F
 import tqdm
 import pandas as pd
-import nibabel as nib
 from nibabel.orientations import aff2axcodes
 from monai.data import NibabelReader
-import numpy as np
+from monai.data import ITKReader
 
 from monai.transforms import (
     EnsureChannelFirstd,
@@ -66,7 +63,7 @@ class CTReportDataset(Dataset):
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
-                LoadImaged(keys=["image"], image_only=False, reader=NibabelReader),
+                LoadImaged(keys=["image"], image_only=False, reader=ITKReader),
                 EnsureTyped(keys="image", track_meta=True), # manually added
                 EnsureChannelFirstd(keys=["image"]),
                 Orientationd(keys=["image"], axcodes="RAS"),
@@ -101,7 +98,7 @@ class CTReportDataset(Dataset):
         # each key is a tuple, tuple[0] is findings and tuple[1] is impression
         return accession_to_text
 
-    def nii_img_to_tensor(self, path):
+    def h5_to_tensor(self, path):
         # non-debug implementation
         transformed_tensor = self.merlin_transform({'image': path})
         img_tensor = transformed_tensor["image"]
@@ -130,9 +127,11 @@ class CTReportDataset(Dataset):
         datalist = []
         for patient_folder in tqdm.tqdm(glob.glob(os.path.join(self.data_folder, '*'))):
             for accession_folder in glob.glob(os.path.join(patient_folder, '*')):
-                nii_files = glob.glob(os.path.join(accession_folder, '*.nii.gz'))
+                # nii_files = glob.glob(os.path.join(accession_folder, '*.nii.gz'))
+                nii_files = glob.glob(os.path.join(accession_folder, '*.h5'))
                 for nii_file in nii_files:
                     accession_number = nii_file.split("/")[-1]
+                    accession_number = accession_number.replace('.h5', '.nii.gz')
                     if accession_number not in self.accession_to_text:
                         continue
                     # TODO: if does not work, use the CT-CLIP implementation here
@@ -155,7 +154,7 @@ class CTReportDataset(Dataset):
 
     def __getitem__(self, index):
         nii_file, input_text = self.datalist[index]
-        video_tensor = self.nii_img_to_tensor(nii_file)
+        video_tensor = self.h5_to_tensor(nii_file)
         input_text = str(input_text)
         input_text = input_text.replace('"', '')
         input_text = input_text.replace('\'', '')
