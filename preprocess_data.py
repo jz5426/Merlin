@@ -13,6 +13,11 @@ import SimpleITK as sitk
 import tqdm
 import h5py
 
+from pathlib import Path
+import shutil
+from typing import Dict, List
+import random
+
 def process_row(row):
     # Set up directory parameters
     VolumeName = row["VolumeName"]
@@ -31,7 +36,7 @@ def process_row(row):
     VolumeName = base + ".h5"
     filepath = os.path.join(f'/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip', dir2, dir1, VolumeName)
     dirpath = os.path.dirname(filepath)
-    dirpath = dirpath.replace(f"/CTRATE_Volumes_raw_h5_fp16_noflip/", f"/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed/")
+    dirpath = dirpath.replace(f"/CTRATE_Volumes_raw_h5_fp16_noflip/", f"/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/")
 
     # skip the file from csv if not exists in the data directory (intentional)
     if not os.path.exists(filepath):
@@ -83,9 +88,7 @@ def process_row(row):
     # arr = sitk.GetArrayFromImage(img)
     # print('finish processing ', os.path.join(dirpath, os.path.basename(base)))
 
-if __name__ == "__main__":
-
-
+def process_h5_to_nii_main():
     # split = 'train'
     # d = "validation" if split == "val" else "train"
     
@@ -113,7 +116,7 @@ if __name__ == "__main__":
         VolumeName = base + ".h5"
         filepath = os.path.join(f'/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip', dir2, dir1, VolumeName)
         dirpath = os.path.dirname(filepath)
-        dirpath = dirpath.replace(f"/CTRATE_Volumes_raw_h5_fp16_noflip/", f"/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed/")
+        dirpath = dirpath.replace(f"/CTRATE_Volumes_raw_h5_fp16_noflip/", f"/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/")
 
         # skip the file from csv if not exists in the .h5 data directory (intentional)
         if not os.path.exists(filepath):
@@ -126,3 +129,62 @@ if __name__ == "__main__":
 
     # process_row(rows[0])
     print('finished preprocess_data.py script for Merlin data')
+
+def split_data_main(source, dest, ratio=0.2):
+    """
+    split the preprocessed data into train and val split by moving (not copying) [ratio] number of first-level directories from source to dest while maintaining the directory and file structures
+    note that source is a parent directory contains multiple level of directories and eventually leads to .nii.gz file. the ratio applies 
+    """
+    src = Path(source)
+    dst = Path(dest)
+
+    if not src.exists() or not src.is_dir():
+        raise NotADirectoryError(f"Source does not exist or is not a directory: {src}")
+    if not (0 < ratio < 1):
+        raise ValueError("`ratio` must be a float strictly between 0 and 1.")
+
+    dst.mkdir(parents=True, exist_ok=True)
+
+    # Enumerate immediate subdirectories only
+    subdirs: List[Path] = [p for p in src.iterdir() if p.is_dir()]
+    total = len(subdirs)
+    if total == 0:
+        return {"total": 0, "to_move": 0, "moved": 0, "moved_names": [], "remaining": 0}
+
+    to_move = int(total * ratio)
+    if ratio > 0 and to_move == 0:
+        to_move = 1  # move at least one if a positive ratio was requested
+
+    random.seed(99)
+    selected = random.sample(subdirs, to_move)
+
+    moved_names: List[str] = []
+    for sdir in selected:
+        target = dst / sdir.name
+        if target.exists():
+            raise FileExistsError(
+                f"Destination already has a directory named '{sdir.name}': {target}"
+            )
+        # shutil.move(str(sdir), str(target))
+        moved_names.append(sdir.name)
+
+    remaining = total - len(moved_names)
+    metadata = {
+        "total": total,
+        "to_move": to_move,
+        "moved": len(moved_names),
+        "moved_names": moved_names,
+        "remaining": remaining,
+    }
+    print(metadata)
+
+if __name__ == "__main__":
+    # # converting h5 data into .nii data
+    # process_h5_to_nii_main()
+
+    # spliting the data into train and val
+    split_data_main(
+        source='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
+        dest='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_val/',
+        ratio=0.2
+    )

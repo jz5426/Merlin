@@ -95,7 +95,7 @@ class CTReportDataset(Dataset):
         assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
 
         # NOTE: project a slice and visualize.
-        save_middle_slices_normalized(img_tensor)
+        # save_middle_slices_normalized(img_tensor)
         return img_tensor
 
         # DEBUG ONLY
