@@ -6,7 +6,6 @@ import tqdm
 import pandas as pd
 from nibabel.orientations import aff2axcodes
 from monai.data import NibabelReader
-from monai.data import ITKReader
 
 from monai.transforms import (
     EnsureChannelFirstd,
@@ -22,15 +21,6 @@ from monai.transforms import (
 )
 
 from merlin.train_utils import save_middle_slices_normalized
-
-
-### eval code reference
-# /cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip_processed_val_images
-# NOTE: checkout the Datafolder class in eval.py and the collect_performance.py for evaluation of the fine-tuned model.
-
-### Training code reference
-# '/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip_processed_train_images'
-# NOTE: checkout caption_datasets.py in fvlm repository.
 
 def resize_array(array, current_spacing, target_spacing):
     """
@@ -63,7 +53,7 @@ class CTReportDataset(Dataset):
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
-                LoadImaged(keys=["image"], image_only=False, reader=ITKReader),
+                LoadImaged(keys=["image"], image_only=False, reader=NibabelReader),
                 EnsureTyped(keys="image", track_meta=True), # manually added
                 EnsureChannelFirstd(keys=["image"]),
                 Orientationd(keys=["image"], axcodes="RAS"),
@@ -108,10 +98,9 @@ class CTReportDataset(Dataset):
         save_middle_slices_normalized(img_tensor)
         return img_tensor
 
-        # TODO: double check with the preprocessed data
         # DEBUG ONLY
         # tx = Compose([
-        #     LoadImaged(keys="image", image_only=False),
+        #     LoadImaged(keys="image", image_only=False, reader=NibabelReader),
         #     EnsureTyped(keys="image", track_meta=True),
         # ])
 
@@ -128,11 +117,11 @@ class CTReportDataset(Dataset):
         datalist = []
         for patient_folder in tqdm.tqdm(glob.glob(os.path.join(self.data_folder, '*'))):
             for accession_folder in glob.glob(os.path.join(patient_folder, '*')):
-                # nii_files = glob.glob(os.path.join(accession_folder, '*.nii.gz'))
-                nii_files = glob.glob(os.path.join(accession_folder, '*.h5'))
+                nii_files = glob.glob(os.path.join(accession_folder, '*.nii.gz'))
+                # nii_files = glob.glob(os.path.join(accession_folder, '*.h5'))
                 for nii_file in nii_files:
                     accession_number = nii_file.split("/")[-1]
-                    accession_number = accession_number.replace('.h5', '.nii.gz')
+                    # accession_number = accession_number.replace('.h5', '.nii.gz')
                     if accession_number not in self.accession_to_text:
                         continue
                     # TODO: if does not work, use the CT-CLIP implementation here

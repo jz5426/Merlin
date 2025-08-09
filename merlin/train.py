@@ -16,13 +16,13 @@ from merlin.train_utils import build_prompts, clip_loss, count_params, encode_pr
 # Parse Arguments
 # -----------------------
 parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
-parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
+parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
 parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
 parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
-parser.add_argument("--num_workers", type=int, default=1, help="number of workers")
+parser.add_argument("--num_workers", type=int, default=10, help="number of workers")
 parser.add_argument("--out_csv", type=str, default='./ctrate_zeroshot/results.csv', help="zero-shot result storage path")
 parser.add_argument("--ckpt_path", type=str, default='/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/ctrate_finetuned/ctrate_ckpt.pth', help="zero-shot result storage path")
 args = parser.parse_args()
@@ -31,16 +31,16 @@ warnings.filterwarnings("ignore")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # load dataset
-# TODO: wrong file path
-# should be this one: /cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip, which include .h5 files.
+# NOTE: use the preprocessed files of /cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip, 
+# which include .h5 files; from the preprocess_data.py
 ctrate_train_dataset = CTReportDataset(
     # data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip_processed_train_images',
-    data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip',
+    data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed/',
     report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
 )
 ctrate_val_dataset = CTReportDataset(
     # data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip_processed_val_images',
-    data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip',
+    data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed/',
     report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv' # TODO: need to replace with valid_reports.csv 
 )
 
