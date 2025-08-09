@@ -1,8 +1,7 @@
-# following CT-CLIP's evaluation protocol
-
 import math
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, roc_auc_score, f1_score, precision_score
 from merlin.train_utils import PATHOLOGIES
 
@@ -40,7 +39,7 @@ def find_threshold(probabilities, true_labels):
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--csv_file', type=str, default='')
+parser.add_argument('--csv_file', type=str, default='/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/results.csv')
 args = parser.parse_args()
 
 # get the ground truth labels and the predicted labels
@@ -48,28 +47,38 @@ label_csv = pd.read_csv('/cluster/projects/mcintoshgroup/publicData/CT-RATE/data
 result = pd.read_csv(args.csv_file)
 
 # filter only the prediction columns
-columns = list(result.columns[1:])
+columns = list(result[['_'.join(p.split(' '))+'_prob' for p in PATHOLOGIES]])
+disease_mapper = {'_'.join(p.split(' '))+'_prob': p for p in PATHOLOGIES}
 
-auc_scores = {}
+auc_scores_macro = {}
+auc_scores_weighted = {}
+auc_scores_micro = {}
+
 spec_scores = {}
 sens_scores = {}
 acc_scores = {}
-f1_weighted_scores = {}
+
+f1_scores_macro = {}
+f1_scores_weighted = {}
+f1_scores_micro = {}
+
 prec_scores = {}
 
 for column in columns:
     labels = []
     probs = []
     
-    abnormality = column.split('_')[1]
-
-    for file_name, prob in zip(result['file_name'], result[column]):
+    abnormality = disease_mapper[column]
+    progress = tqdm(zip(result['VolumeName'], result[column]), desc=f"Column {column}", leave=False)
+    for file_name, prob in progress:
         if np.isnan(prob): # very few cases
             prob = 0
         probs.append(prob)
         labels.append(label_csv[label_csv['VolumeName'] == file_name][abnormality].values[0])
 
-    auc_scores[abnormality] = roc_auc_score(labels, probs)
+    auc_scores_macro[abnormality] = roc_auc_score(labels, probs, average='macro')
+    auc_scores_weighted[abnormality] = roc_auc_score(labels, probs, average='weighted')
+    auc_scores_micro[abnormality] = roc_auc_score(labels, probs, average='micro')
 
     # find the best threshold for each label and use that. instead of using 0.5
     threshold = find_threshold(np.array(probs), np.array(labels))
@@ -95,10 +104,16 @@ for column in columns:
     spec_scores[abnormality] = spec
     sens_scores[abnormality] = sens
 
-    f1 = f1_score(gt_labels, pd_labels, average="weighted")
+    f1_macro = f1_score(gt_labels, pd_labels, average="macro")
+    f1_weighted = f1_score(gt_labels, pd_labels, average="weighted")
+    f1_micro = f1_score(gt_labels, pd_labels, average="micro")
+
     prec = precision_score(gt_labels, pd_labels)
 
-    f1_weighted_scores[abnormality] = f1
+    f1_scores_macro[abnormality] = f1_macro
+    f1_scores_weighted[abnormality] = f1_weighted
+    f1_scores_micro[abnormality] = f1_micro
+
     prec_scores[abnormality] = prec
 
     acc = (tp + tn) / (tp + tn + fp + fn)
@@ -106,9 +121,16 @@ for column in columns:
 
 print('\n\n')
 
-print('Average AUC of Ours:', round(np.mean(list(auc_scores.values())), 3))
+print('Average AUC macro of Ours:', round(np.mean(list(auc_scores_macro.values())), 3))
+print('Average AUC weighted of Ours:', round(np.mean(list(auc_scores_weighted.values())), 3))
+print('Average AUC micro of Ours:', round(np.mean(list(auc_scores_micro.values())), 3))
+
+print('Average F1 macro of Ours:', round(np.mean(list(f1_scores_macro.values())), 3))
+print('Average F1 weighted of Ours:', round(np.mean(list(f1_scores_weighted.values())), 3))
+print('Average F1 micro of Ours:', round(np.mean(list(f1_scores_micro.values())), 3))
+
 print('Average ACC of Ours:', round(np.mean(list(acc_scores.values())), 3))
+
 print('Average Spec of Ours:', round(np.mean(list(spec_scores.values())), 3))
 print('Average Sens of Ours:', round(np.mean(list(sens_scores.values())), 3))
-print('Average F1 of Ours:', round(np.mean(list(f1_weighted_scores.values())), 3))
 print('Average Prec of Ours:', round(np.mean(list(prec_scores.values())), 3))
