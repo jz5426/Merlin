@@ -135,6 +135,7 @@ def split_data_main(source, dest, ratio=0.2):
     split the preprocessed data into train and val split by moving (not copying) [ratio] number of first-level directories from source to dest while maintaining the directory and file structures
     note that source is a parent directory contains multiple level of directories and eventually leads to .nii.gz file. the ratio applies 
     """
+    # TODO: remain to test
     src = Path(source)
     dst = Path(dest)
 
@@ -165,7 +166,7 @@ def split_data_main(source, dest, ratio=0.2):
             raise FileExistsError(
                 f"Destination already has a directory named '{sdir.name}': {target}"
             )
-        # shutil.move(str(sdir), str(target))
+        shutil.move(str(sdir), str(target))
         moved_names.append(sdir.name)
 
     remaining = total - len(moved_names)
@@ -173,10 +174,10 @@ def split_data_main(source, dest, ratio=0.2):
         "total": total,
         "to_move": to_move,
         "moved": len(moved_names),
-        "moved_names": moved_names,
         "remaining": remaining,
     }
     print(metadata)
+    return
 
 if __name__ == "__main__":
     # # converting h5 data into .nii data
