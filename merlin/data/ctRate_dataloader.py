@@ -108,6 +108,7 @@ class CTReportDataset(Dataset):
         save_middle_slices_normalized(img_tensor)
         return img_tensor
 
+        # TODO: double check with the preprocessed data
         # DEBUG ONLY
         # tx = Compose([
         #     LoadImaged(keys="image", image_only=False),
