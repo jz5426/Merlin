@@ -135,7 +135,6 @@ def split_data_main(source, dest, ratio=0.2):
     split the preprocessed data into train and val split by moving (not copying) [ratio] number of first-level directories from source to dest while maintaining the directory and file structures
     note that source is a parent directory contains multiple level of directories and eventually leads to .nii.gz file. the ratio applies 
     """
-    # TODO: remain to test
     src = Path(source)
     dst = Path(dest)
 

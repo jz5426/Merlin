@@ -14,4 +14,4 @@
 source activate merlin
 
 # train split
-python /cluster/home/t135419uhn/Merlin/merlin/train.py --batch_size 8
+python /cluster/home/t135419uhn/Merlin/merlin/train.py --batch_size 8 --num_workers 5
