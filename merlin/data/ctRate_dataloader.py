@@ -6,6 +6,7 @@ import tqdm
 import pandas as pd
 from nibabel.orientations import aff2axcodes
 from monai.data import NibabelReader
+from monai.data import ITKReader
 
 from monai.transforms import (
     EnsureChannelFirstd,
@@ -53,7 +54,8 @@ class CTReportDataset(Dataset):
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
-                LoadImaged(keys=["image"], image_only=False, reader=NibabelReader),
+                # LoadImaged(keys=["image"], image_only=False, reader=NibabelReader),
+                LoadImaged(keys=["image"], reader=ITKReader(image_only=False)),
                 EnsureTyped(keys="image", track_meta=True), # manually added
                 EnsureChannelFirstd(keys=["image"]),
                 Orientationd(keys=["image"], axcodes="RAS"),
@@ -88,15 +90,21 @@ class CTReportDataset(Dataset):
         # each key is a tuple, tuple[0] is findings and tuple[1] is impression
         return accession_to_text
 
-    def h5_to_tensor(self, path):
+    def nii_to_tensor(self, path):
         # non-debug implementation
-        transformed_tensor = self.merlin_transform({'image': path})
-        img_tensor = transformed_tensor["image"]
-        assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
+        try:
+            transformed_tensor = self.merlin_transform({'image': path})
+            img_tensor = transformed_tensor["image"]
+            assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
+            return img_tensor
+        except Exception as e:
+            print(f"Error loading: {path}")
+            raise
 
         # NOTE: project a slice and visualize.
+        # TODO: try to swap axis and try to visualize.
+        # img_tensor = img_tensor.transpose(1, 2)
         # save_middle_slices_normalized(img_tensor)
-        return img_tensor
 
         # DEBUG ONLY
         # tx = Compose([
@@ -144,7 +152,7 @@ class CTReportDataset(Dataset):
 
     def __getitem__(self, index):
         nii_file, input_text = self.datalist[index]
-        video_tensor = self.h5_to_tensor(nii_file)
+        video_tensor = self.nii_to_tensor(nii_file)
         input_text = str(input_text)
         input_text = input_text.replace('"', '')
         input_text = input_text.replace('\'', '')

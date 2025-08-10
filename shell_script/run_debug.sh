@@ -4,7 +4,7 @@
 #SBATCH --reservation=mcintoshgroup_gpu1
 #SBATCH -t 70:00:00
 #SBATCH --mem=40G
-#SBATCH -J merlin_ctrate_train
+#SBATCH -J debug
 #SBATCH -p gpu
 #SBATCH -c 10
 #SBATCH -N 1
@@ -13,5 +13,5 @@
 
 source activate merlin
 
-# train split
-python /cluster/home/t135419uhn/Merlin/merlin/train.py --batch_size 8 --num_workers 10
+python /cluster/home/t135419uhn/Merlin/debug.py --data_split train
+python /cluster/home/t135419uhn/Merlin/debug.py --data_split val

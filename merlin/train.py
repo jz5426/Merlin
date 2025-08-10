@@ -16,7 +16,7 @@ from merlin.train_utils import build_prompts, clip_loss, count_params, encode_pr
 # Parse Arguments
 # -----------------------
 parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
-parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
+parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
 parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
@@ -73,7 +73,7 @@ for epoch in range(1, args.epochs + 1):
     model.train()
     running_loss = 0.0
     for batch in tqdm(train_loader, desc=f"Epoch {epoch} [Train]", leave=False):
-        img, txt = batch['image'].to(device, non_blocking=True), batch['text']
+        img, txt = batch['image'].to(device), batch['text']
         optimizer.zero_grad()
         img_feats_norm, txt_feats_norm = model(img, txt)  # [B, 512], [B, 512]
         loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
@@ -88,7 +88,7 @@ for epoch in range(1, args.epochs + 1):
         val_loss = 0.0
         with torch.no_grad():
             for batch in tqdm(val_loader, desc=f"Epoch {epoch} [Val]", leave=False):
-                img, txt = batch['image'].to(device, non_blocking=True), batch['text']
+                img, txt = batch['image'].to(device), batch['text']
                 img_feats_norm, txt_feats_norm = model(img, txt)
                 loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
                 val_loss += loss.item()
