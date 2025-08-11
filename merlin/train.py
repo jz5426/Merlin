@@ -18,7 +18,7 @@ from merlin.train_utils import build_prompts, clip_loss, count_params, encode_pr
 parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
 parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
-parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
+parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")

@@ -54,11 +54,29 @@ class CTReportDataset(Dataset):
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
             [
-                # LoadImaged(keys=["image"], image_only=False, reader=NibabelReader),
                 LoadImaged(keys=["image"], reader=ITKReader(image_only=False)),
                 EnsureTyped(keys="image", track_meta=True), # manually added
                 EnsureChannelFirstd(keys=["image"]),
                 Orientationd(keys=["image"], axcodes="RAS"),
+                Spacingd(keys=["image"], pixdim=(1.5, 1.5, 3), mode=("bilinear")),
+                ScaleIntensityRanged(
+                    keys=["image"], a_min=-1000, a_max=1000, b_min=0.0, b_max=1.0, clip=True
+                ),
+                SpatialPadd(keys=["image"], spatial_size=[224, 224, 160]),
+                CenterSpatialCropd(
+                    roi_size=[224, 224, 160],
+                    keys=["image"],
+                ),
+                ToTensord(keys=["image"]),
+            ]
+        )
+
+        self.debug_transform = Compose( # this is a set of deterministic transform functions
+            [
+                LoadImaged(keys=["image"], reader=ITKReader(image_only=False)),
+                EnsureTyped(keys="image", track_meta=True), # manually added
+                EnsureChannelFirstd(keys=["image"]),
+                # Orientationd(keys=["image"], axcodes="RAS"),
                 Spacingd(keys=["image"], pixdim=(1.5, 1.5, 3), mode=("bilinear")),
                 ScaleIntensityRanged(
                     keys=["image"], a_min=-1000, a_max=1000, b_min=0.0, b_max=1.0, clip=True
@@ -92,19 +110,18 @@ class CTReportDataset(Dataset):
 
     def nii_to_tensor(self, path):
         # non-debug implementation
-        try:
-            transformed_tensor = self.merlin_transform({'image': path})
-            img_tensor = transformed_tensor["image"]
-            assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
-            return img_tensor
-        except Exception as e:
-            print(f"Error loading: {path}")
-            raise
+        transformed_tensor = self.merlin_transform({'image': path})
+        img_tensor = transformed_tensor["image"]
+        assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
 
         # NOTE: project a slice and visualize.
-        # TODO: try to swap axis and try to visualize.
-        # img_tensor = img_tensor.transpose(1, 2)
-        # save_middle_slices_normalized(img_tensor)
+        # save_middle_slices_normalized(
+        #     self.debug_transform({'image': path})["image"],
+        #     save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_LPS')
+        # save_middle_slices_normalized(
+        #     img_tensor,
+        #     save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_RAS')
+        return img_tensor
 
         # DEBUG ONLY
         # tx = Compose([
