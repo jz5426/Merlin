@@ -123,6 +123,8 @@ class CTReportDataset(Dataset):
         # axial slice: 180 degree rotation
         # coronal slice: x flip
         # sagittal slice: y flip
+        # It computes the flips/rotations needed so the voxel axes 
+        # now match the desired mapping while still being correct in the reference frame.
         save_middle_slices_normalized(
             img_tensor,
             save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_RAS')
