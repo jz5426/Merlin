@@ -115,12 +115,18 @@ class CTReportDataset(Dataset):
         assert aff2axcodes(img_tensor.meta["affine"]) == ('R', 'A', 'S')
 
         # NOTE: project a slice and visualize.
-        # save_middle_slices_normalized(
-        #     self.debug_transform({'image': path})["image"],
-        #     save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_LPS')
-        # save_middle_slices_normalized(
-        #     img_tensor,
-        #     save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_RAS')
+        save_middle_slices_normalized(
+            self.debug_transform({'image': path})["image"],
+            save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_LPS')
+        
+        # relative to LPS slices, the RAS slices should be
+        # axial slice: 180 degree rotation
+        # coronal slice: x flip
+        # sagittal slice: y flip
+        save_middle_slices_normalized(
+            img_tensor,
+            save_dir='/cluster/home/t135419uhn/Merlin/visualize_transformed_ct_slices_RAS')
+        
         return img_tensor
 
         # DEBUG ONLY

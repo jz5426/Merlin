@@ -40,10 +40,7 @@ def count_params(model):
 # Loss function (CLIP-style)
 # -----------------------
 def clip_loss(img_feats, txt_feats, temperature):
-    # NOTE: already normalized during forward pass
-    # img_feats = nn.functional.normalize(img_feats, dim=-1)
-    # txt_feats = nn.functional.normalize(txt_feats, dim=-1)
-
+    # TODO: should i keep the temperature fixed to 0.07 instead of learnable?
     logits_per_image = (img_feats @ txt_feats.t()) / temperature
     logits_per_text = logits_per_image.t()
     targets = torch.arange(img_feats.size(0), device=img_feats.device) # define target index for each row in logits_per_image or logits_per_text matrix.
@@ -162,13 +159,16 @@ def save_middle_slices_normalized(ct_tensor, save_dir='/cluster/home/t135419uhn/
     sagittal = vol[mid_x, :, :].cpu().numpy()   # (Y,Z)
 
     # Arrange for display
-    axial_img    = axial.T
-    coronal_img  = coronal.T
-    sagittal_img = sagittal.T
+    axial_img    = axial.T # [Y, X]
+    coronal_img  = coronal.T # [Z, X]
+    sagittal_img = sagittal.T # [Z, Y]
 
-    if convention.lower().startswith("radio"):
-        axial_img    = np.fliplr(axial_img)
-        coronal_img  = np.fliplr(coronal_img)
+    coronal_img = np.flipud(coronal_img)
+    sagittal_img = np.flipud(sagittal_img)
+
+    # if convention.lower().startswith("radio"):
+    #     axial_img    = np.fliplr(axial_img)
+    #     coronal_img  = np.fliplr(coronal_img)
 
     # Robust percentile normalization to [0,255]
     def to_uint8(img, p_lo=1.0, p_hi=99.0, z_clip=2.5, eps=1e-6):
