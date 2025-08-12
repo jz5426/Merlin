@@ -18,7 +18,7 @@ from merlin.train_utils import build_prompts, clip_loss, count_params, encode_pr
 # -----------------------
 parser = argparse.ArgumentParser(description="Train Merlin on CT-RATE")
 parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
-parser.add_argument("--epochs", type=int, default=200, help="Number of epochs")
+parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
 parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
@@ -47,7 +47,6 @@ ctrate_val_dataset = CTReportDataset(
 # load dataloader
 train_loader = DataLoader(ctrate_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 val_loader = DataLoader(ctrate_val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-
 
 # -----------------------
 # Model & optimizer
@@ -96,6 +95,8 @@ for epoch in range(1, args.epochs + 1):
         optimizer.step()
         running_loss += loss.item()
 
+        break
+
     # ---- After epoch ----
     avg_forward_mem = sum(inference_mem_list) / len(inference_mem_list)
     avg_backward_mem = sum(backward_mem_list) / len(backward_mem_list)
@@ -106,9 +107,8 @@ for epoch in range(1, args.epochs + 1):
 
     train_elapsed_time = time.time() - train_start_time  # in seconds
     mins, secs = divmod(train_elapsed_time, 60)
-    print(f"Epoch {epoch} - Train Loss: {train_loss:.4f} - Time: {int(mins)}m {secs:.2f}s")
-
     train_loss = running_loss / len(train_loader)
+    print(f"Epoch {epoch} - Train Loss: {train_loss:.4f} - Time: {int(mins)}m {secs:.2f}s")
 
     # ---- Validate ----
     if epoch % args.val_every == 0:
