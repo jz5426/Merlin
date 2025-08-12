@@ -67,6 +67,9 @@ prompts = build_prompts(PATHOLOGIES)
 # Training loop
 # -----------------------
 best_val_loss = float("inf")
+inference_mem_list = []
+backward_mem_list = []
+
 for epoch in range(1, args.epochs + 1):
     # ---- Train ----
     model.train()
@@ -75,11 +78,31 @@ for epoch in range(1, args.epochs + 1):
     for batch in tqdm(train_loader, desc=f"Epoch {epoch} [Train]", leave=False):
         img, txt = batch['image'].to(device), batch['text']
         optimizer.zero_grad()
+
+        # ---- Forward memory ----
+        torch.cuda.reset_peak_memory_stats(device)
         img_feats_norm, txt_feats_norm = model(img, txt)  # [B, 512], [B, 512]
+        forward_mem = torch.cuda.max_memory_allocated(device) / (1024 ** 2)  # MB
+        inference_mem_list.append(forward_mem)
+
         loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
+
+        # ---- Backward memory ----
+        torch.cuda.reset_peak_memory_stats(device)
         loss.backward()
+        backward_mem = torch.cuda.max_memory_allocated(device) / (1024 ** 2)  # MB
+        backward_mem_list.append(backward_mem)
+
         optimizer.step()
         running_loss += loss.item()
+
+    # ---- After epoch ----
+    avg_forward_mem = sum(inference_mem_list) / len(inference_mem_list)
+    avg_backward_mem = sum(backward_mem_list) / len(backward_mem_list)
+    total_mem_list = [fmem+bmem for fmem, bmem in zip(inference_mem_list, backward_mem_list)]
+    print(f"Avg Inference Memory Consumption:  {avg_forward_mem:.2f} MB")
+    print(f"Avg Backward Memory Consumption: {avg_backward_mem:.2f} MB")
+    print(f"Avg Total Training Memory Consumption: {sum(total_mem_list) / len(total_mem_list):.2f} MB")
 
     train_elapsed_time = time.time() - train_start_time  # in seconds
     mins, secs = divmod(train_elapsed_time, 60)
