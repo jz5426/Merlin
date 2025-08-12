@@ -1,6 +1,6 @@
 
 """
-trying to see which file is corrupted that causes the LoadImaged error.
+trying to see which preprocessed .nii.gz file is corrupted that causes the LoadImaged error.
 """
 
 from monai.transforms import LoadImaged

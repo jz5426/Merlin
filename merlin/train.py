@@ -24,7 +24,8 @@ parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight dec
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
 parser.add_argument("--num_workers", type=int, default=1, help="number of workers")
-parser.add_argument("--out_csv", type=str, default='./ctrate_zeroshot/results.csv', help="zero-shot result storage path")
+parser.add_argument("--finetuned_out_csv", type=str, default='./ctrate_zeroshot/best_finetuned_results.csv', help="zero-shot result storage path AFTER finetuning")
+parser.add_argument("--prior_finetune_out_csv", type=str, default='./ctrate_zeroshot/prior_finetune_results.csv', help="zero-shot result storage path BEFORE finetuning")
 parser.add_argument("--is_saving_ckpt", type=bool, default=True, help="is saving the checkpoint during training")
 parser.add_argument("--ckpt_path", type=str, default='/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/ctrate_finetuned/ctrate_ckpt.pth', help="zero-shot result storage path")
 args = parser.parse_args()
@@ -59,8 +60,24 @@ optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay
 # print arguments
 for k, v in vars(args).items():
     print(f"{k}: {v}")
+print('Maximum batch size in L40 GPU is 10, experimentally found.')
 
 prompts = build_prompts(PATHOLOGIES)
+
+# -----------------------
+# Prior finetuning evaluation
+# -----------------------
+print('Perform zoer-shot validation BEFORE finetuning.')
+txt_feats_norm = encode_prompts(model.model, prompts, device)
+predict_pathologies(
+    model=model.model,
+    val_loader=val_loader,
+    pathologies=PATHOLOGIES,
+    txt_feats_norm=txt_feats_norm,
+    temperature=args.temperature,
+    out_csv=args.prior_finetune_out_csv,
+    device=device,
+)
 
 # -----------------------
 # Training loop
@@ -94,8 +111,6 @@ for epoch in range(1, args.epochs + 1):
 
         optimizer.step()
         running_loss += loss.item()
-
-        break
 
     # ---- After epoch ----
     avg_forward_mem = sum(inference_mem_list) / len(inference_mem_list)
@@ -131,6 +146,7 @@ for epoch in range(1, args.epochs + 1):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             saving_ckpt(model, val_loss, args)
+
             # -----------------------
             # Run prompt-based multi-label predictions on the full val set
             # -----------------------
@@ -141,6 +157,6 @@ for epoch in range(1, args.epochs + 1):
                 pathologies=PATHOLOGIES,
                 txt_feats_norm=txt_feats_norm,
                 temperature=args.temperature,
-                out_csv=args.out_csv,
+                out_csv=args.finetuned_out_csv,
                 device=device,
             )
