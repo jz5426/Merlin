@@ -85,7 +85,7 @@ predict_pathologies(
 best_val_loss = float("inf")
 inference_mem_list = []
 backward_mem_list = []
-
+print('Start training loop.')
 for epoch in range(1, args.epochs + 1):
     # ---- Train ----
     model.train()

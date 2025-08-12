@@ -39,7 +39,7 @@ def find_threshold(probabilities, true_labels):
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--csv_file', type=str, default='/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/results.csv')
+parser.add_argument('--csv_file', type=str, default='/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/prior_finetune_results.csv')
 args = parser.parse_args()
 
 # get the ground truth labels and the predicted labels
