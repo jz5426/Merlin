@@ -76,6 +76,7 @@ for column in columns:
         probs.append(prob)
         labels.append(label_csv[label_csv['VolumeName'] == file_name][abnormality].values[0])
 
+    # auc per abnormality and then average
     auc_scores_macro[abnormality] = roc_auc_score(labels, probs, average='macro')
     auc_scores_weighted[abnormality] = roc_auc_score(labels, probs, average='weighted')
     auc_scores_micro[abnormality] = roc_auc_score(labels, probs, average='micro')
