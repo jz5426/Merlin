@@ -1,6 +1,5 @@
 
 import torch
-import torch
 from torch import nn
 import csv
 import os
@@ -214,3 +213,14 @@ def save_middle_slices_normalized(ct_tensor, save_dir='/cluster/home/t135419uhn/
     save_png(os.path.join(save_dir, f"{prefix}_axial.png"),    axial_u8)
     save_png(os.path.join(save_dir, f"{prefix}_coronal.png"),  coronal_u8)
     save_png(os.path.join(save_dir, f"{prefix}_sagittal.png"), sagittal_u8)
+
+def saving_ckpt(model, loss, args):
+    if args.is_saving_ckpt:
+        # save the best checkpoint during the training trajectory
+        os.makedirs(os.path.dirname(args.ckpt_path), exist_ok=True)
+
+        torch.save(model.state_dict(), args.ckpt_path)
+        print(f"[Checkpoint] Best model updated (val_loss={loss:.4f}) → {args.ckpt_path}")
+        return
+
+    print(f"[Checkpoint] NOT SAVING IT")
