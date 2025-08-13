@@ -1,3 +1,7 @@
+# CT_Scan_Metadata_Complete_35747: the scale and orientation information can be found in this metadata file. note that the 
+
+# inference only dataloader
+
 import os
 import glob
 from torch.utils.data import Dataset
@@ -23,7 +27,7 @@ from monai.transforms import (
 
 from merlin.train_utils import save_middle_slices_normalized
 
-class CTReportDataset(Dataset):
+class RadchestCTInferenceDataloader(Dataset):
     def __init__(self, data_folder, report_csv, min_slices=20):
         self.split = 'train' if 'train' in data_folder.lower() else 'val'
 
@@ -124,6 +128,7 @@ class CTReportDataset(Dataset):
         # print('HI')
 
     def prepare_samples(self):
+      # TODO: only need to contain images
         datalist = []
         for patient_folder in tqdm.tqdm(glob.glob(os.path.join(self.data_folder, '*'))):
             for accession_folder in glob.glob(os.path.join(patient_folder, '*')):
@@ -155,16 +160,11 @@ class CTReportDataset(Dataset):
     def __getitem__(self, index):
         nii_file, input_text = self.datalist[index]
         video_tensor = self.nii_to_tensor(nii_file)
-        input_text = str(input_text)
-        input_text = input_text.replace('"', '')
-        input_text = input_text.replace('\'', '')
-        input_text = input_text.replace('(', '')
-        input_text = input_text.replace(')', '')
 
         data = {
             'image_id': os.path.basename(nii_file),
             'image': video_tensor,
-            'text': input_text
+            # no need to have labels
         }
         return data
 
