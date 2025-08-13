@@ -23,7 +23,7 @@ from monai.transforms import (
 
 from merlin.train_utils import save_middle_slices_normalized
 
-class CTReportDataset(Dataset):
+class CTRateReportDataset(Dataset):
     def __init__(self, data_folder, report_csv, min_slices=20):
         self.split = 'train' if 'train' in data_folder.lower() else 'val'
 

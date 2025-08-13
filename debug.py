@@ -6,7 +6,7 @@ trying to see which preprocessed .nii.gz file is corrupted that causes the LoadI
 from monai.transforms import LoadImaged
 from monai.data import ITKReader
 from tqdm import tqdm
-from merlin.data.ctRate_dataloader import CTReportDataset
+from merlin.data.ctRate_dataloader import CTRateReportDataset
 
 import argparse
 
@@ -20,7 +20,7 @@ args = parser.parse_args()
 assert args.data_split in ['train', 'val']
 
 loader = LoadImaged(keys=["image"], reader=ITKReader(image_only=False))
-ctrate_dataset = CTReportDataset(
+ctrate_dataset = CTRateReportDataset(
     data_folder=f'/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_{args.data_split}/',
     report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
 )

@@ -2,7 +2,7 @@ import warnings
 import torch
 from torch.utils.data import DataLoader 
 from merlin import Merlin
-from merlin.data.ctRate_dataloader import CTReportDataset
+from merlin.data.ctRate_dataloader import CTRateReportDataset
 from tqdm import tqdm
 import argparse
 import torch
@@ -24,6 +24,7 @@ parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight dec
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
 parser.add_argument("--num_workers", type=int, default=1, help="number of workers")
+parser.add_argument("--dataset", type=str, default='radchest_ct', help="ct_rate or radchest_ct")
 parser.add_argument("--finetuned_out_csv", type=str, default='./ctrate_zeroshot/best_finetuned_results.csv', help="zero-shot result storage path AFTER finetuning")
 parser.add_argument("--prior_finetune_out_csv", type=str, default='./ctrate_zeroshot/prior_finetune_results.csv', help="zero-shot result storage path BEFORE finetuning")
 parser.add_argument("--is_saving_ckpt", type=bool, default=True, help="is saving the checkpoint during training")
@@ -36,18 +37,28 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # load dataset
 # NOTE: use the preprocessed files of /cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_h5_fp16_noflip, 
 # which include .h5 files; from the preprocess_data.py
-ctrate_train_dataset = CTReportDataset(
-    data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
-    report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
-)
-ctrate_val_dataset = CTReportDataset(
-    data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_val/',
-    report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv' # TODO: need to replace with valid_reports.csv 
-)
+
+if args.dataset == 'ct_rate':
+    train_dataset = CTRateReportDataset(
+        data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
+        report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
+    )
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+
+    val_dataset = CTRateReportDataset(
+        data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_val/',
+        report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv' # TODO: need to replace with valid_reports.csv 
+    )
+elif args.dataset == 'radchest_ct':
+    val_dataset = RadchestCTInferenceDataloader(
+        data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
+        report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
+    )
+else:
+    assert False, 'Invalid dataset'
 
 # load dataloader
-train_loader = DataLoader(ctrate_train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-val_loader = DataLoader(ctrate_val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
 # -----------------------
 # Model & optimizer
