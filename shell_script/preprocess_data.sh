@@ -4,7 +4,7 @@
 #SBATCH --reservation=mcintoshgroup_gpu1
 #SBATCH -t 70:00:00
 #SBATCH --mem=40G
-#SBATCH -J preprocess_ctrate
+#SBATCH -J preprocess_radchestCT
 #SBATCH -p gpu
 #SBATCH -c 10
 #SBATCH -N 1
@@ -13,4 +13,6 @@
 
 source activate merlin
 
-python /cluster/home/t135419uhn/Merlin/preprocess_data.py
+# python /cluster/home/t135419uhn/Merlin/preprocess_fp16_ctrate.py
+
+python /cluster/home/t135419uhn/Merlin/preprocess_raw_radchestct.py

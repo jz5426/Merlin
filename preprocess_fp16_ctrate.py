@@ -23,10 +23,9 @@ def process_row(row):
     VolumeName = row["VolumeName"]
     dir1 = VolumeName.rsplit("_", 1)[0]
     dir2 = VolumeName.rsplit("_", 2)[0]
-    #TODO: organize the files in the following fomrat if necessary.
     # filepath = os.path.join(data_root, f"{split}", dir2, dir1, VolumeName)
 
-    # transform from "train_1_a" to "train_1a" NOTE:TODO: this is just temporary changes, the file structure should follows exactly the same as the one from metadata file ideally.
+    # transform from "train_1_a" to "train_1a" NOTE: this is just temporary changes, the file structure should follows exactly the same as the one from metadata file ideally.
     dir1 = dir1[::-1].replace("_", "", 1)[::-1] 
 
     # Handle compound extensions like .nii.gz
@@ -103,7 +102,6 @@ def process_h5_to_nii_main():
         VolumeName = row["VolumeName"]
         dir1 = VolumeName.rsplit("_", 1)[0]
         dir2 = VolumeName.rsplit("_", 2)[0]
-        #TODO: organize the files in the following fomrat if necessary.
         # filepath = os.path.join(data_root, f"{split}", dir2, dir1, VolumeName)
 
         # transform from "train_1_a" to "train_1a" NOTE:TODO: this is just temporary changes, the file structure should follows exactly the same as the one from metadata file ideally.
@@ -180,11 +178,11 @@ def split_data_main(source, dest, ratio=0.2):
 
 if __name__ == "__main__":
     # # converting h5 data into .nii data
-    # process_h5_to_nii_main()
+    process_h5_to_nii_main()
 
     # spliting the data into train and val
-    split_data_main(
-        source='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
-        dest='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_val/',
-        ratio=0.2
-    )
+    # split_data_main(
+    #     source='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
+    #     dest='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_val/',
+    #     ratio=0.2
+    # )
