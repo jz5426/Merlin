@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import DataLoader 
 from merlin import Merlin
 from merlin.data.ctRate_dataloader import CTRateReportDataset
+from merlin.data.radchestCT_dataloader import RadchestCTInferenceDataloader
+
 from tqdm import tqdm
 import argparse
 import torch
@@ -11,7 +13,7 @@ from torch.optim import AdamW
 import os
 import time
 
-from merlin.train_utils import build_prompts, clip_loss, count_params, encode_prompts, predict_pathologies, PATHOLOGIES, saving_ckpt
+from merlin.train_utils import build_prompts, clip_loss, count_params, encode_prompts, predict_pathologies, CTRATE_PATHOLOGIES, RADCHESTCT_PATHOLOGIES, saving_ckpt
 
 # -----------------------
 # Parse Arguments
@@ -24,9 +26,8 @@ parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight dec
 parser.add_argument("--val_every", type=int, default=1, help="Validate every N epochs")
 parser.add_argument("--temperature", type=float, default=0.07, help="Contrastive loss temperature")
 parser.add_argument("--num_workers", type=int, default=1, help="number of workers")
-parser.add_argument("--dataset", type=str, default='radchest_ct', help="ct_rate or radchest_ct")
+parser.add_argument("--dataset", type=str, default='ct_rate', help="ct_rate or radchest_ct")
 parser.add_argument("--finetuned_out_csv", type=str, default='./ctrate_zeroshot/best_finetuned_results.csv', help="zero-shot result storage path AFTER finetuning")
-parser.add_argument("--prior_finetune_out_csv", type=str, default='./ctrate_zeroshot/prior_finetune_results.csv', help="zero-shot result storage path BEFORE finetuning")
 parser.add_argument("--is_saving_ckpt", type=bool, default=True, help="is saving the checkpoint during training")
 parser.add_argument("--ckpt_path", type=str, default='/cluster/projects/mcintoshgroup/publicData/merlin_checkpoint/ctrate_finetuned/ctrate_ckpt.pth', help="zero-shot result storage path")
 args = parser.parse_args()
@@ -49,16 +50,23 @@ if args.dataset == 'ct_rate':
         data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_val/',
         report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv' # TODO: need to replace with valid_reports.csv 
     )
+    # load dataloader
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    pathologies = CTRATE_PATHOLOGIES
+    csv_instance_identifier = 'VolumeName'
+    prior_finetune_out_csv = './ctrate_zeroshot/prior_finetune_results.csv'
 elif args.dataset == 'radchest_ct':
     val_dataset = RadchestCTInferenceDataloader(
-        data_folder='/cluster/projects/mcintoshgroup/publicData/CT-RATE-Processed/benchmark/CTRATE_Volumes_raw_nii_fp16_noflip_merlin_preprocessed_train/',
-        report_csv='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/radiology_text_reports/train_reports.csv'
+        data_folder='/cluster/projects/mcintoshgroup/publicData/RADChestCT/radchest_ct_preprocessed_nii/',
+        label_csv='/cluster/projects/mcintoshgroup/publicData/RADChestCT/radchest_ct_metadata/final_labels.csv'
     )
+    # load dataloader
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    pathologies = RADCHESTCT_PATHOLOGIES
+    csv_instance_identifier = 'NoteAcc_DEID'
+    prior_finetune_out_csv = './radchestct_zeroshot/prior_finetune_results.csv'
 else:
     assert False, 'Invalid dataset'
-
-# load dataloader
-val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
 # -----------------------
 # Model & optimizer
@@ -73,7 +81,7 @@ for k, v in vars(args).items():
     print(f"{k}: {v}")
 print('Maximum batch size in L40 GPU is 10, experimentally found.')
 
-prompts = build_prompts(PATHOLOGIES)
+prompts = build_prompts(pathologies)
 
 # -----------------------
 # Prior finetuning evaluation
@@ -83,91 +91,92 @@ txt_feats_norm = encode_prompts(model.model, prompts, device)
 predict_pathologies(
     model=model.model,
     val_loader=val_loader,
-    pathologies=PATHOLOGIES,
+    pathologies=pathologies,
     txt_feats_norm=txt_feats_norm,
     temperature=args.temperature,
-    out_csv=args.prior_finetune_out_csv,
+    out_csv=prior_finetune_out_csv,
     device=device,
+    csv_img_identifier=csv_instance_identifier
 )
+if args.dataset == 'ct_rate':
+    # -----------------------
+    # Training loop
+    # -----------------------
+    best_val_loss = float("inf")
+    inference_mem_list = []
+    backward_mem_list = []
+    print('Start training loop.')
+    for epoch in range(1, args.epochs + 1):
+        # ---- Train ----
+        model.train()
+        running_loss = 0.0
+        train_start_time = time.time()  # record start time
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch} [Train]", leave=False):
+            img, txt = batch['image'].to(device), batch['text']
+            optimizer.zero_grad()
 
-# -----------------------
-# Training loop
-# -----------------------
-best_val_loss = float("inf")
-inference_mem_list = []
-backward_mem_list = []
-print('Start training loop.')
-for epoch in range(1, args.epochs + 1):
-    # ---- Train ----
-    model.train()
-    running_loss = 0.0
-    train_start_time = time.time()  # record start time
-    for batch in tqdm(train_loader, desc=f"Epoch {epoch} [Train]", leave=False):
-        img, txt = batch['image'].to(device), batch['text']
-        optimizer.zero_grad()
+            # ---- Forward memory ----
+            torch.cuda.reset_peak_memory_stats(device)
+            img_feats_norm, txt_feats_norm = model(img, txt)  # [B, 512], [B, 512]
+            forward_mem = torch.cuda.max_memory_allocated(device) / (1024 ** 2)  # MB
+            inference_mem_list.append(forward_mem)
 
-        # ---- Forward memory ----
-        torch.cuda.reset_peak_memory_stats(device)
-        img_feats_norm, txt_feats_norm = model(img, txt)  # [B, 512], [B, 512]
-        forward_mem = torch.cuda.max_memory_allocated(device) / (1024 ** 2)  # MB
-        inference_mem_list.append(forward_mem)
+            loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
 
-        loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
+            # ---- Backward memory ----
+            torch.cuda.reset_peak_memory_stats(device)
+            loss.backward()
+            backward_mem = torch.cuda.max_memory_allocated(device) / (1024 ** 2)  # MB
+            backward_mem_list.append(backward_mem)
 
-        # ---- Backward memory ----
-        torch.cuda.reset_peak_memory_stats(device)
-        loss.backward()
-        backward_mem = torch.cuda.max_memory_allocated(device) / (1024 ** 2)  # MB
-        backward_mem_list.append(backward_mem)
+            optimizer.step()
+            running_loss += loss.item()
 
-        optimizer.step()
-        running_loss += loss.item()
+        # ---- After epoch ----
+        avg_forward_mem = sum(inference_mem_list) / len(inference_mem_list)
+        avg_backward_mem = sum(backward_mem_list) / len(backward_mem_list)
+        total_mem_list = [fmem+bmem for fmem, bmem in zip(inference_mem_list, backward_mem_list)]
+        print(f"Avg Inference Memory Consumption:  {avg_forward_mem:.2f} MB")
+        print(f"Avg Backward Memory Consumption: {avg_backward_mem:.2f} MB")
+        print(f"Avg Total Training Memory Consumption: {sum(total_mem_list) / len(total_mem_list):.2f} MB")
 
-    # ---- After epoch ----
-    avg_forward_mem = sum(inference_mem_list) / len(inference_mem_list)
-    avg_backward_mem = sum(backward_mem_list) / len(backward_mem_list)
-    total_mem_list = [fmem+bmem for fmem, bmem in zip(inference_mem_list, backward_mem_list)]
-    print(f"Avg Inference Memory Consumption:  {avg_forward_mem:.2f} MB")
-    print(f"Avg Backward Memory Consumption: {avg_backward_mem:.2f} MB")
-    print(f"Avg Total Training Memory Consumption: {sum(total_mem_list) / len(total_mem_list):.2f} MB")
+        train_elapsed_time = time.time() - train_start_time  # in seconds
+        mins, secs = divmod(train_elapsed_time, 60)
+        train_loss = running_loss / len(train_loader)
+        print(f"Epoch {epoch} - Train Loss: {train_loss:.4f} - Time: {int(mins)}m {secs:.2f}s")
 
-    train_elapsed_time = time.time() - train_start_time  # in seconds
-    mins, secs = divmod(train_elapsed_time, 60)
-    train_loss = running_loss / len(train_loader)
-    print(f"Epoch {epoch} - Train Loss: {train_loss:.4f} - Time: {int(mins)}m {secs:.2f}s")
+        # ---- Validate ----
+        if epoch % args.val_every == 0:
+            model.eval()
+            val_loss = 0.0
+            inference_start_time = time.time()  # record start time
+            with torch.no_grad():
+                for batch in tqdm(val_loader, desc=f"Epoch {epoch} [Val]", leave=False):
+                    img, txt = batch['image'].to(device), batch['text']
+                    img_feats_norm, txt_feats_norm = model(img, txt)
+                    loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
+                    val_loss += loss.item()
 
-    # ---- Validate ----
-    if epoch % args.val_every == 0:
-        model.eval()
-        val_loss = 0.0
-        inference_start_time = time.time()  # record start time
-        with torch.no_grad():
-            for batch in tqdm(val_loader, desc=f"Epoch {epoch} [Val]", leave=False):
-                img, txt = batch['image'].to(device), batch['text']
-                img_feats_norm, txt_feats_norm = model(img, txt)
-                loss = clip_loss(img_feats_norm, txt_feats_norm, args.temperature)
-                val_loss += loss.item()
+            inference_elapsed_time = time.time() - inference_start_time  # in seconds
+            mins, secs = divmod(inference_elapsed_time, 60)
+            print(f"Epoch {epoch}/{args.epochs} - Val Loss: {val_loss:.4f} - Inference Time: {int(mins)}m {secs:.2f}s")
 
-        inference_elapsed_time = time.time() - inference_start_time  # in seconds
-        mins, secs = divmod(inference_elapsed_time, 60)
-        print(f"Epoch {epoch}/{args.epochs} - Val Loss: {val_loss:.4f} - Inference Time: {int(mins)}m {secs:.2f}s")
+            val_loss /= len(val_loader)
 
-        val_loss /= len(val_loader)
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                saving_ckpt(model, val_loss, args)
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            saving_ckpt(model, val_loss, args)
-
-            # -----------------------
-            # Run prompt-based multi-label predictions on the full val set
-            # -----------------------
-            txt_feats_norm = encode_prompts(model.model, prompts, device)
-            predict_pathologies(
-                model=model.model,
-                val_loader=val_loader,
-                pathologies=PATHOLOGIES,
-                txt_feats_norm=txt_feats_norm,
-                temperature=args.temperature,
-                out_csv=args.finetuned_out_csv,
-                device=device,
-            )
+                # -----------------------
+                # Run prompt-based multi-label predictions on the full val set
+                # -----------------------
+                txt_feats_norm = encode_prompts(model.model, prompts, device)
+                predict_pathologies(
+                    model=model.model,
+                    val_loader=val_loader,
+                    pathologies=CTRATE_PATHOLOGIES,
+                    txt_feats_norm=txt_feats_norm,
+                    temperature=args.temperature,
+                    out_csv=args.finetuned_out_csv,
+                    device=device,
+                )

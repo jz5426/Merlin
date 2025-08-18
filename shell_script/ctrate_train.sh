@@ -14,4 +14,4 @@
 source activate merlin
 
 # train split
-python /cluster/home/t135419uhn/Merlin/merlin/train.py --batch_size 10 --num_workers 10 --is_saving_ckpt False
+python /cluster/home/t135419uhn/Merlin/merlin/train.py --batch_size 8 --num_workers 10 --is_saving_ckpt True --dataset ct_rate

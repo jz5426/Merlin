@@ -6,7 +6,7 @@ import os
 from PIL import Image
 import numpy as np
 
-PATHOLOGIES = [
+CTRATE_PATHOLOGIES = [
     'Medical material',
     'Arterial wall calcification',
     'Cardiomegaly',
@@ -24,6 +24,24 @@ PATHOLOGIES = [
     'Consolidation',
     'Bronchiectasis',
     'Interlobular septal thickening'
+]
+
+RADCHESTCT_PATHOLOGIES = [
+    'calcification',
+    'cardiomegaly',
+    'pericardial effusion',
+    'hernia',
+    'lymphadenopathy',
+    'emphysema',
+    'atelectasis',
+    'nodule',
+    'opacity',
+    'fibrosis',
+    'pleural effusion',
+    'bronchial wall thickening',
+    'consolidation',
+    'bronchiectasis',
+    'septal thickening'
 ]
 
 def count_params(model):
@@ -77,7 +95,15 @@ def encode_prompts(model, prompts, device):
 
 
 @torch.no_grad()
-def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperature, out_csv, device, id_key="image_id"):
+def predict_pathologies(model, 
+    val_loader, 
+    pathologies, 
+    txt_feats_norm, 
+    temperature, 
+    out_csv, 
+    device, 
+    id_key="image_id",
+    csv_img_identifier='VolumeName'):
     """
     For each image in val_loader, compute probability for each pathology:
         p = softmax([sim_pos, sim_neg]/T)[0]
@@ -109,9 +135,9 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
             # Similarities to all prompts: [B, 2P]
             sims = img_feats_norm @ txt_feats_norm.t()
 
-            # For each sample, compute per-pathology prob & pred and save as a dictionary
+            # For each sample in a batch, compute per-pathology prob & pred and save as a dictionary
             for b, sample_id in enumerate(ids):
-                row = {"VolumeName": sample_id}
+                row = {csv_img_identifier: sample_id}
                 for k, (pos_i, neg_i) in enumerate(idx_pairs):
                     logits = torch.stack([sims[b, pos_i], sims[b, neg_i]]) / temperature
                     probs = torch.softmax(logits, dim=0)
@@ -126,7 +152,7 @@ def predict_pathologies(model, val_loader, pathologies, txt_feats_norm, temperat
             row_idx += len(ids)
 
     # overwrite the CSV file.
-    fieldnames = ["VolumeName"] + [f"{'_'.join(p.split())}_prob" for p in pathologies] + [f"{'_'.join(p.split())}_pred" for p in pathologies]
+    fieldnames = [csv_img_identifier] + [f"{'_'.join(p.split())}_prob" for p in pathologies] + [f"{'_'.join(p.split())}_pred" for p in pathologies]
     os.makedirs(os.path.dirname(out_csv), exist_ok=True)
     with open(out_csv, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

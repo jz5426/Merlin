@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, roc_auc_score, f1_score, precision_score
-from merlin.train_utils import PATHOLOGIES
+from merlin.train_utils import CTRATE_PATHOLOGIES, RADCHESTCT_PATHOLOGIES
 
 def find_threshold(probabilities, true_labels):
     """
@@ -39,16 +39,39 @@ def find_threshold(probabilities, true_labels):
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--csv_file', type=str, default='/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/prior_finetune_results.csv')
+
+parser.add_argument('--dataset', type=str, default='radchest_ct')
+
+# ct-rate
+# parser.add_argument('--csv_file', type=str, default='/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/prior_finetune_results.csv')
+# parser.add_argument('--label_csv', type=str, default='/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/multi_abnormality_labels/dataset_multi_abnormality_labels_train_predicted_labels.csv')
+
+# radchest_Ct
+# parser.add_argument('--csv_file', type=str, default='/cluster/home/t135419uhn/Merlin/shell_script/radchestct_zeroshot/prior_finetune_results.csv')
+# parser.add_argument('--label_csv', type=str, default='/cluster/projects/mcintoshgroup/publicData/RADChestCT/radchest_ct_metadata/final_labels.csv')
 args = parser.parse_args()
 
+
+if 'ct_rate' == args.dataset:
+    row_identifier = 'VolumeName'
+    # csv_file = '/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/prior_finetune_results.csv'
+    csv_file = '/cluster/home/t135419uhn/Merlin/shell_script/ctrate_zeroshot/best_finetuned_results.csv'
+    label_csv = '/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/multi_abnormality_labels/dataset_multi_abnormality_labels_train_predicted_labels.csv'
+    pathologies = CTRATE_PATHOLOGIES
+elif 'radchest_ct' == args.dataset:
+    row_identifier = 'NoteAcc_DEID'
+    csv_file = '/cluster/home/t135419uhn/Merlin/shell_script/radchestct_zeroshot/prior_finetune_results.csv'
+    label_csv = '/cluster/projects/mcintoshgroup/publicData/RADChestCT/radchest_ct_metadata/final_labels.csv'
+    pathologies = RADCHESTCT_PATHOLOGIES
+
+
 # get the ground truth labels and the predicted labels
-label_csv = pd.read_csv('/cluster/projects/mcintoshgroup/publicData/CT-RATE/dataset/multi_abnormality_labels/dataset_multi_abnormality_labels_train_predicted_labels.csv')
-result = pd.read_csv(args.csv_file)
+label_csv = pd.read_csv(label_csv)
+result = pd.read_csv(csv_file)
 
 # filter only the prediction columns
-columns = list(result[['_'.join(p.split(' '))+'_prob' for p in PATHOLOGIES]])
-disease_mapper = {'_'.join(p.split(' '))+'_prob': p for p in PATHOLOGIES}
+columns = list(result[['_'.join(p.split(' '))+'_prob' for p in pathologies]])
+disease_mapper = {'_'.join(p.split(' '))+'_prob': p for p in pathologies}
 
 auc_scores_macro = {}
 auc_scores_weighted = {}
@@ -69,12 +92,17 @@ for column in columns:
     probs = []
     
     abnormality = disease_mapper[column]
-    progress = tqdm(zip(result['VolumeName'], result[column]), desc=f"Column {column}", leave=False)
+    progress = tqdm(zip(result[row_identifier], result[column]), desc=f"Column {column}", leave=False)
     for file_name, prob in progress:
         if np.isnan(prob): # very few cases
             prob = 0
         probs.append(prob)
-        labels.append(label_csv[label_csv['VolumeName'] == file_name][abnormality].values[0])
+        if args.dataset == 'radchest_ct':
+            abnormality = '_'.join(abnormality.split(' '))
+            labels.append(label_csv[label_csv[row_identifier].replace('.nii.gz', '') == file_name.replace('.nii.gz', '')][abnormality].values[0])
+        elif args.dataset == 'ct_rate':
+            labels.append(label_csv[label_csv[row_identifier] == file_name][abnormality].values[0])
+
 
     # auc per abnormality and then average
     auc_scores_macro[abnormality] = roc_auc_score(labels, probs, average='macro')

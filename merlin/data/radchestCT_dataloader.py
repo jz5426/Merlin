@@ -28,8 +28,15 @@ from monai.transforms import (
 from merlin.train_utils import save_middle_slices_normalized
 
 class RadchestCTInferenceDataloader(Dataset):
-    def __init__(self, data_folder, report_csv, min_slices=20):
-        self.split = 'train' if 'train' in data_folder.lower() else 'val'
+    def __init__(self, data_folder, label_csv, split='test'):
+        self.split = split
+        assert split in ['train', 'val', 'test']
+        if split == 'test':
+            self.filter_marker = 'tst'
+        elif split == 'train':
+            self.filter_marker = 'trn'
+        elif split == 'val':
+            self.filter_marker == 'val'
 
         # NOTE: must use this transformation from Merlin
         self.merlin_transform = Compose( # this is a set of deterministic transform functions
@@ -72,22 +79,22 @@ class RadchestCTInferenceDataloader(Dataset):
         )
 
         self.data_folder = data_folder
-        self.min_slices = min_slices
-        self.accession_to_text = None
+        self.qualified_data_instances = None
         self.paths=[]
-        self.accession_to_text = self.load_accession_text(report_csv)            
+        self.qualified_data_instances = self.load_qualified_instances(label_csv)            
         self.datalist = self.prepare_samples()
         print('number of files ', len(self.datalist))
 
         self.count = 0
 
-    def load_accession_text(self, csv_file):
+    def load_qualified_instances(self, csv_file):
         df = pd.read_csv(csv_file)
-        accession_to_text = {}
+        qualified_data_instances = set()
         for index, row in df.iterrows():
-            accession_to_text[row['VolumeName']] = row["Findings_EN"], row['Impressions_EN']
-        # each key is a tuple, tuple[0] is findings and tuple[1] is impression
-        return accession_to_text
+            vol_name = row['NoteAcc_DEID'] # without extension
+            if self.filter_marker in vol_name:
+                qualified_data_instances.add(vol_name+'.nii.gz')
+        return qualified_data_instances
 
     def nii_to_tensor(self, path):
         # non-debug implementation
@@ -128,43 +135,24 @@ class RadchestCTInferenceDataloader(Dataset):
         # print('HI')
 
     def prepare_samples(self):
-      # TODO: only need to contain images
         datalist = []
-        for patient_folder in tqdm.tqdm(glob.glob(os.path.join(self.data_folder, '*'))):
-            for accession_folder in glob.glob(os.path.join(patient_folder, '*')):
-                nii_files = glob.glob(os.path.join(accession_folder, '*.nii.gz'))
-                # nii_files = glob.glob(os.path.join(accession_folder, '*.h5'))
-                for nii_file in nii_files:
-                    accession_number = nii_file.split("/")[-1]
-                    # accession_number = accession_number.replace('.h5', '.nii.gz')
-                    if accession_number not in self.accession_to_text:
-                        continue
-                    # TODO: if does not work, use the CT-CLIP implementation here
-                    # report text
-                    findings_impressions = self.accession_to_text[accession_number] # [0] is findings and [1] is impression
-
-                    # combine the findings and impression sections
-                    input_text_concat = ""
-                    for text in findings_impressions:
-                        if text == "Not given.":
-                            text=""
-                        input_text_concat = input_text_concat + str(text)
-
-                    datalist.append((nii_file, input_text_concat))
-                    self.paths.append(nii_file)
+        for nii_file in tqdm.tqdm(glob.glob(os.path.join(self.data_folder, '*.nii.gz'))):
+            accession_number = nii_file.split("/")[-1]
+            if accession_number not in self.qualified_data_instances:
+                continue
+            datalist.append(nii_file) # file path
         return datalist
 
     def __len__(self):
         return len(self.datalist)
 
     def __getitem__(self, index):
-        nii_file, input_text = self.datalist[index]
+        nii_file = self.datalist[index]
         video_tensor = self.nii_to_tensor(nii_file)
 
         data = {
             'image_id': os.path.basename(nii_file),
             'image': video_tensor,
-            # no need to have labels
         }
         return data
 
